@@ -10,13 +10,13 @@ const SEED_XOR: u64 = 0x77de55f9d2fe1e0d;
 const AVG_CHILD_COUNT: f32 = 50.0;
 
 pub struct Node {
-    board: board::Board,
+    pub board: board::Board,
     visits: RwLock<u32>,
     depth: RwLock<u32>,
     height: RwLock<u32>,
     eval: RwLock<f32>,
     ending: RwLock<Option<Ending>>,
-    children: RwLock<Vec<Arc<Node>>>,
+    pub children: RwLock<Vec<Arc<Node>>>,
     parent: Weak<Node>,
     last_move: Option<String>,
     //proc_threads is number of threads searching in this node's children

@@ -50,7 +50,7 @@ fn main() {
     let (mut options, mut root) = initialize();
     let mut searching = Arc::new(Mutex::new(false));
 
-    println!("Rust_Chess version 0.1 by Kyle Forrester");
+    println!("Hrolfnir 0.1 by Kyle Forrester");
 
     loop {
         let input = tokenize_stdin();
@@ -216,37 +216,67 @@ fn uci_position(root: Arc<Node>, input: Vec<String>) -> Arc<Node> {
         return root;
     }
     //Build out what the board should look like
-    let board = match input[1].as_str() {
-        "fen" => Board::new(&input[2..]),
-        "startpos" => {
-            let mut temp = Board::new(STARTPOS);
-            if input.len() >= 4 {
-                for token in &input[3..] {
-                    temp.make_move(token);
+    let mut pos_state = PositionState::Initial;
+    let mut fen = String::from(STARTPOS);
+    let mut fen_accumulator: Vec<String> = Vec::new();
+    let mut moves_accumulator: Vec<String> = Vec::new();
+    for token in input.iter().skip(1) {
+        match token.as_str() {
+            "startpos" => {
+                pos_state = PositionState::StartPos;
+                fen = String::from(STARTPOS);
+            },
+            "fen" => {
+                pos_state = PositionState::Fen;
+            },
+            "moves" => {
+                pos_state = PositionState::Moves;
+            },
+            _ => {
+                match pos_state {
+                    PositionState::Initial => {
+                        println!("Unexpected parameter {}!", token);
+                        return root;
+                    },
+                    PositionState::StartPos => {
+                        println!("Unexpected parameter {}!", token);
+                        return root;
+                    },
+                    PositionState::Fen => {
+                        fen_accumulator.push(token.to_string());
+                    },
+                    PositionState::Moves => {
+                        moves_accumulator.push(token.to_string());
+                    }
                 }
             }
-            temp
-        },
-        _ => {
-            println!("Unrecognized position command");
-            return root;
-        },
-    };
-
+        }
+    }
+    
+    if fen_accumulator.len() > 0 {
+        fen = fen_accumulator.join(" ");
+    }
+    
+    //Create the board position
+    let board = Board::new(&fen);
+    for mov in moves_accumulator.iter() {
+        board.do_move(mov);
+    }
+    
     //Set the root node to the current node, child node, or grandchild with matching board
     //If no one matches the board, start a new root node with the correct board
-    if root.board.equals(board) {
+    if root.board.eq(&board) {
         return root;
     }
     let children = root.children.read().unwrap();
-    for child in children {
-        if child.board.equals(board) {
-            return Arc::new(child);
+    for child in children.iter() {
+        if child.board.eq(&board) {
+            return Arc::clone(child);
         }
         let grandchildren = child.children.read().unwrap();
-        for grandchild in grandchildren {
-            if grandchild.board.equals(board) {
-                return Arc::new(grandchild);
+        for grandchild in grandchildren.iter() {
+            if grandchild.board.eq(&board) {
+                return Arc::clone(grandchild);
             }
         }
     }
@@ -297,7 +327,11 @@ fn parse_go_command(input: Vec<String>) -> UciGo {
 }
 
 fn parse_go_time(input: Vec<String>) -> UciGo {
-    let mut go_enum = UciGo::Time{wtime: None, btime: None, winc: None, binc: None, movestogo: None};
+    let mut wtime = Option::None;
+    let mut btime = Option::None;
+    let mut winc = Option::None;
+    let mut binc = Option::None;
+    let mut movestogo = Option::None;
     let mut state = GoState::Initial;
     for word in &input[1..] {
         match word.as_str() {
@@ -308,16 +342,24 @@ fn parse_go_time(input: Vec<String>) -> UciGo {
             "movestogo" => state = GoState::Movestogo,
             _ => {
                 match state {
-                    GoState::WTime => go_enum.wtime = Some(word.parse().unwrap()),
-                    GoState::BTime => go_enum.btime = Some(word.parse().unwrap()),
-                    GoState::WInc => go_enum.winc = Some(word.parse().unwrap()),
-                    GoState::BInc => go_enum.binc = Some(word.parse().unwrap()),
-                    GoState::Movestogo => go_enum.movestogo = Some(word.parse().unwrap()),
+                    GoState::WTime => wtime = Some(word.parse().unwrap()),
+                    GoState::BTime => btime = Some(word.parse().unwrap()),
+                    GoState::WInc => winc = Some(word.parse().unwrap()),
+                    GoState::BInc => binc = Some(word.parse().unwrap()),
+                    GoState::Movestogo => movestogo = Some(word.parse().unwrap()),
                     GoState::Initial => panic!("Go command requires arguments!"),
                 }
             }
         }
     }
+
+    let go_enum = UciGo::Time {
+        wtime: wtime,
+        btime: btime,
+        winc: winc,
+        binc: binc,
+        movestogo: movestogo,
+    };
     if go_enum.wtime.is_none() && go_enum.btime.is_none() {
         panic!("Go command with times must implement either wtime or btime!");
     }
@@ -356,5 +398,12 @@ fn uci_quit() {
 }
 
 fn tokenize_stdin() -> Vec<String> {
+    let mut input = String::new();
+
+    io::stdin().read_line(&mut input).expect("Error reading from stdin");
+    input.split_ascii_whitespace().collect();
+
+
+
     String::from("Yo")
 }

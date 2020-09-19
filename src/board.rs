@@ -1,4 +1,5 @@
 
+#[derive(Eq,PartialEq)]
 pub struct Board {
     board: String,
 }
@@ -8,5 +9,9 @@ impl Board {
         Board {
             board: String::from("Yo"),
         }
+    }
+
+    pub fn do_move(&self, mov: &str) {
+
     }
 }
