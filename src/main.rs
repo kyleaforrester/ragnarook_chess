@@ -50,7 +50,7 @@ fn main() {
     let (mut options, mut root) = initialize();
     let mut searching = Arc::new(Mutex::new(false));
 
-    println!("Hrolfnir 0.1 by Kyle Forrester");
+    println!("Ragnarook 0.1 by Kyle Forrester");
 
     loop {
         let input = tokenize_stdin();
