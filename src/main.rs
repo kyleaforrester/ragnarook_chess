@@ -6,19 +6,23 @@ mod move_gen;
 use board::Board;
 use search::Node;
 use std::thread;
-use std::sync::{RwLock, Mutex, Arc, RwLockWriteGuard};
+use std::sync::{RwLock, Mutex, Arc};
+use std::io;
 
+#[derive(Clone)]
 struct UciOption {
     value: UciValue,
     name: String,
 }
 
+#[derive(Clone)]
 enum UciValue {
     Button,
     Check{value: bool, default: bool},
     Spin{value: i32, default: i32, min: i32, max: i32},
 }
 
+#[derive(Clone)]
 enum UciGo {
     Time{wtime: Option<u32>, btime: Option<u32>, winc: Option<u32>, binc: Option<u32>, movestogo: Option<u32>},
     Depth{plies: u32},
@@ -68,8 +72,8 @@ fn main() {
     }
 }
 
-fn initialize() -> (Arc<Vec<UciOption>>, Arc<Node>) {
-    let mut options = Arc::new(Vec::new());
+fn initialize() -> (Vec<UciOption>, Arc<Node>) {
+    let mut options = Vec::new();
     options.push(UciOption {
         name: String::from("Threads"),
         value: UciValue::Spin {
@@ -161,7 +165,7 @@ fn uci_uci(options: &Vec<UciOption>) {
     println!("id name Rust_Chess 0.1.0");
     println!("id author Kyle Forrester");
 
-    for option in options {
+    for option in options.iter() {
         match option.value{
             UciValue::Button => println!("option name {} type button", option.name),
             UciValue::Check{value, default} => println!("option name {} type check default {}", option.name, default),
@@ -176,14 +180,14 @@ fn uci_isready() {
     println!("readyok");
 }
 
-fn uci_setoption(mut options: &Vec<UciOption>, input: Vec<String>) {
+fn uci_setoption(options: &mut Vec<UciOption>, input: Vec<String>) {
     if input[1] != "name" || input[3] != "value" {
         println!("Unrecognized UCI setoption command");
         return;
     }
 
     //Find the option the user is trying to modify
-    let mut option = match options.iter_mut().find(|&x| x.name == input[2]) {
+    let mut option = match options.iter_mut().find(|x| x.name == input[2]) {
         Some(o) => o,
         None => {
             println!("Unrecognized UCI setoption command");
@@ -193,12 +197,12 @@ fn uci_setoption(mut options: &Vec<UciOption>, input: Vec<String>) {
 
     //Set the option's value to the user input
     match option.value {
-        UciValue::Check{value, default} => match input[4].as_str() {
+        UciValue::Check{mut value, default} => match input[4].as_str() {
             "true" => value = true,
             "false" => value = false,
             _ => println!("Unrecognized UCI setoption command"),
         },
-        UciValue::Spin{value, default, min, max} => match input[4].trim().parse() {
+        UciValue::Spin{mut value, default, min, max} => match input[4].trim().parse() {
             Ok(v) => value = v,
             Err(_) => println!("Unrecognized UCI setoption command"),
         },
@@ -258,7 +262,7 @@ fn uci_position(root: Arc<Node>, input: Vec<String>) -> Arc<Node> {
     }
     
     //Create the board position
-    let board = Board::new(&fen);
+    let mut board = Board::new(&fen);
     for mov in moves_accumulator.iter() {
         board.do_move(mov);
     }
@@ -285,31 +289,31 @@ fn uci_position(root: Arc<Node>, input: Vec<String>) -> Arc<Node> {
     Arc::new(Node::new(board))
 }
 
-fn uci_go(root: &Arc<Node>, options: &Arc<Vec<UciOption>>, searching: &Arc<Mutex<bool>>, input: Vec<String>) {
+fn uci_go(root: &Arc<Node>, options: &Vec<UciOption>, searching: &Arc<Mutex<bool>>, input: Vec<String>) {
     let mut s = searching.lock().unwrap();
     *s = true;
 
-    let go_cmd = Arc::new(parse_go_command(input));
+    let go_cmd = parse_go_command(input);
     let new_root = Arc::clone(root);
-    let new_options = Arc::clone(options);
+    let new_options = options.clone();
     let new_searching = Arc::clone(searching);
-    let new_go_cmd = Arc::clone(&go_cmd);
+    let new_go_cmd = go_cmd.clone();
 
     thread::spawn(move || {
         search::search(new_root, new_options, new_searching, new_go_cmd, true);
     });
 
 
-    let threads = match options.iter().find(|&&x| x.name == "Threads").unwrap().value {
+    let threads = match options.iter().find(|&x| x.name == "Threads").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("Threads UCI Option should be a Spin option!"),
     };
 
     for i in 0..threads-1 {
         let new_root = Arc::clone(root);
-        let new_options = Arc::clone(options);
+        let new_options = options.clone();
         let new_searching = Arc::clone(searching);
-        let new_go_cmd = Arc::clone(&go_cmd);
+        let new_go_cmd = go_cmd.clone();
         thread::spawn(move || {
             search::search(new_root, new_options, new_searching, new_go_cmd, false);
         });
@@ -323,6 +327,7 @@ fn parse_go_command(input: Vec<String>) -> UciGo {
         "nodes" => parse_go_nodes(input),
         "movetime" => parse_go_movetime(input),
         "infinite" => parse_go_infinite(input),
+        _ => panic!("UCI go command {} not recognized", input[1].as_str()),
     }
 }
 
@@ -360,7 +365,7 @@ fn parse_go_time(input: Vec<String>) -> UciGo {
         binc: binc,
         movestogo: movestogo,
     };
-    if go_enum.wtime.is_none() && go_enum.btime.is_none() {
+    if wtime.is_none() && btime.is_none() {
         panic!("Go command with times must implement either wtime or btime!");
     }
     go_enum
@@ -399,11 +404,6 @@ fn uci_quit() {
 
 fn tokenize_stdin() -> Vec<String> {
     let mut input = String::new();
-
     io::stdin().read_line(&mut input).expect("Error reading from stdin");
-    input.split_ascii_whitespace().collect();
-
-
-
-    String::from("Yo")
+    input.split_ascii_whitespace().map(|x| String::from(x)).collect()
 }

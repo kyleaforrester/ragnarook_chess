@@ -1,19 +1,23 @@
 use crate::{UciOption, UciValue, UciGo};
+use crate::UciGo::{Time, Nodes, Movetime, Infinite, Depth};
 use crate::misc;
 use crate::board;
 use crate::move_gen;
 use std::cmp;
 use std::time::{SystemTime, Instant, Duration, UNIX_EPOCH};
 use std::sync::{Weak, RwLock, Mutex, Arc, RwLockWriteGuard};
+use std::convert::TryFrom;
 
 const SEED_XOR: u64 = 0x77de55f9d2fe1e0d;
 const AVG_CHILD_COUNT: f32 = 50.0;
+const MAX_GAME_LENGTH: u32 = 60;
+const TIME_EXTENSION_MULT_MAX: f32 = 3.0;
+const BYTES_PER_NODE: u32 = 1000;
 
 pub struct Node {
     pub board: board::Board,
     visits: RwLock<u32>,
     depth: RwLock<u32>,
-    height: RwLock<u32>,
     eval: RwLock<f32>,
     ending: RwLock<Option<Ending>>,
     pub children: RwLock<Vec<Arc<Node>>>,
@@ -38,7 +42,6 @@ impl Node {
             board: pos,
             visits: RwLock::new(1),
             depth: RwLock::new(0),
-            height: RwLock::new(0),
             eval: RwLock::new(0.5),
             ending: RwLock::new(None),
             children: RwLock::new(Vec::new()),
@@ -49,7 +52,7 @@ impl Node {
     }
 }
 
-pub fn search(root: Arc<Node>, options: Arc<Vec<UciOption>>, searching: Arc<Mutex<bool>>, go_parms: Arc<UciGo>, main: bool) {
+pub fn search(root: Arc<Node>, options: Vec<UciOption>, searching: Arc<Mutex<bool>>, go_parms: UciGo, main: bool) {
     let start_time = Instant::now();
     let mut last_info = Instant::now();
     let mut rng_state: u64 = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64) ^ SEED_XOR;
@@ -88,10 +91,10 @@ pub fn search(root: Arc<Node>, options: Arc<Vec<UciOption>>, searching: Arc<Mute
         _ => panic!("Dynamism UCI Option should be a UciValue::Spin option!"),
     };
 
-    while searching.lock().unwrap() {
+    while *searching.lock().unwrap() {
         // MutexGuard is already dropped due to not being assigned a variable
         // navigate through the tree to identify leaf node
-        let (leaf, child_lock) = find_leaf_node(&root, mcts_explore, mcts_hash);
+        let (leaf, child_lock) = find_leaf_node(&root, mcts_explore);
         // bloom leaf node
         move_gen::bloom(&leaf, child_lock);
         // propogate values back up the tree
@@ -99,10 +102,10 @@ pub fn search(root: Arc<Node>, options: Arc<Vec<UciOption>>, searching: Arc<Mute
 
         if main {
             if last_info.elapsed() >= Duration::from_secs(2) {
-                print_info(root, multi_pv, &start_time);
+                print_info(&root, multi_pv, &start_time);
                 last_info = Instant::now();
             }
-            if stop_searching(root, &start_time, &go_parms, move_overhead, move_speed, mcts_hash) {
+            if stop_searching(&root, &start_time, &go_parms, move_overhead, move_speed, mcts_hash) {
                 let mut s = searching.lock().unwrap();
                 *s = false;
             }
@@ -117,52 +120,52 @@ pub fn search(root: Arc<Node>, options: Arc<Vec<UciOption>>, searching: Arc<Mute
     }
 }
 
-fn print_info(root: &Arc<Node>, multi_pv: u32, start_time: &Instant) {
-    let mut children_sorted: Vec<(u32, u32)> = Vec::new();
+fn print_info(root: &Arc<Node>, multi_pv: i32, start_time: &Instant) {
+    let mut children_sorted: Vec<(usize, u32)> = Vec::new();
     let children = root.children.read().unwrap();
     for child in children.iter().enumerate() {
         let node = Arc::clone(child.1);
-        children_sorted.push((child.0, node.visits.read().unwrap()));
+        children_sorted.push((child.0, *node.visits.read().unwrap()));
     }
 
-    children_sorted.sort_unstable_by(|a, b| a.1 > b.1);
+    children_sorted.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-    let depth = root.depth.read().unwrap();
-    let nodes = root.visits.read().unwrap();
+    let depth = *root.depth.read().unwrap();
+    let nodes = *root.visits.read().unwrap();
     let time = start_time.elapsed();
     let nps = (nodes as f32) / time.as_secs_f32();
 
     for i in 0..cmp::max(multi_pv as usize, children_sorted.len()) {
-        let child = Arc::clone(&children[&children_sorted[i].0]);
+        let child = Arc::clone(&children[children_sorted[i].0]);
         let pv = get_pv(&child);
-        println!("info multipv {} depth {} seldepth {} time {} nodes {} pv_nodes {} nps {} score cp {} tbhits 0 pv {}", i, depth, depth, time.as_millis(), nodes, child.visits.read().unwrap(), nps, misc::eval_to_cp(child.eval.read().unwrap()), pv.trim());
+        println!("info multipv {} depth {} seldepth {} time {} nodes {} pv_nodes {} nps {} score cp {} tbhits 0 pv {}", i, depth, depth, time.as_millis(), nodes, child.visits.read().unwrap(), nps, misc::eval_to_cp(*child.eval.read().unwrap()), pv.trim());
     }
 }
 
 fn get_pv(node: &Arc<Node>) -> String {
     let mut pv = String::new();
-    pv.push_str(node.last_move.unwrap());
+    pv.push_str(&node.last_move.unwrap());
 
-    let mut children_sorted: Vec<(u32, u32)> = Vec::new();
+    let mut children_sorted: Vec<(usize, u32)> = Vec::new();
 
     let children = node.children.read().unwrap();
     for child in children.iter().enumerate() {
         let node = Arc::clone(child.1);
-        children_sorted.push((child.0, node.visits.read().unwrap()));
+        children_sorted.push((child.0, *node.visits.read().unwrap()));
     }
 
-    children_sorted.sort_unstable_by(|a, b| a.1 > b.1);
+    children_sorted.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
     if children_sorted.len() > 0 {
         pv.push(' ');
-        pv.push_str(get_pv(Arc::clone(&children[&children_sorted[0].0])));
+        pv.push_str(&get_pv(&children[children_sorted[0].0]));
     }
 
     pv
 }
 
-fn print_bestmove(root: &Arc<Node>, skill: u32, rng_state: &mut u64) {
-    let mut children_sorted: Vec<(u32, f32)> = Vec::new();
+fn print_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) {
+    let mut children_sorted: Vec<(usize, f32)> = Vec::new();
     let children = root.children.read().unwrap();
 
     if skill < 25 {
@@ -171,40 +174,43 @@ fn print_bestmove(root: &Arc<Node>, skill: u32, rng_state: &mut u64) {
         let mut rng: u32;
         for child in children.iter().enumerate() {
             let node = Arc::clone(child.1);
-            (rng, rng_state) = misc::spcg32(rng_state);
-            let percent_loss = ((rng as f32) / (std::u32::MAX as f32)) * ((25 - skill) as f32 / 25 as f32) * 2;
-            let actual = node.visits.read().unwrap() as f32;
-            children_sorted.push((child.0, (actual - (actual * percent_loss)) as i32));
+            let (tmp_rng, tmp_rng_state) = misc::spcg32(rng_state);
+            rng = tmp_rng;
+            *rng_state = tmp_rng_state;
+            let percent_loss = ((rng as f32) / (std::u32::MAX as f32)) * ((25 - skill) as f32 / 25 as f32) * 2.0;
+            let actual = *node.visits.read().unwrap() as f32;
+            children_sorted.push((child.0, actual - (actual * percent_loss)));
         }
     }
     else {
         for child in children.iter().enumerate() {
             let node = Arc::clone(child.1);
-            children_sorted.push((child.0, node.visits.read().unwrap() as f32));
+            children_sorted.push((child.0, *node.visits.read().unwrap() as f32));
         }
     }
 
-    children_sorted.sort_unstable_by(|a, b| a.1 > b.1);
+    children_sorted.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-    let node = Arc::clone(&children[&children_sorted[0].0]);
+    let node = Arc::clone(&children[children_sorted[0].0]);
     println!("bestmove {}", node.last_move.unwrap());
 }
 
-fn find_leaf_node (root: &Arc<Node>, mcts_explore: u32) -> (Arc<Node>, RwLockWriteGuard<Vec<Node>>) {
-    let mut node = root;
+fn find_leaf_node (root: &Arc<Node>, mcts_explore: i32) -> (Arc<Node>, RwLockWriteGuard<Vec<Arc<Node>>>) {
+    let mut node = Arc::clone(root);
 
     loop {
         let mut children = node.children.read().unwrap();
         while children.len() > 0 {
             // Continue down the path to the next child
-            let children_sorted: Vec<(u32, f32)> = Vec::new();
+            let children_sorted: Vec<(usize, f32)> = Vec::new();
 
             for child in children.iter().enumerate() {
-                children_sorted.push((child.0, mcts_score(child.1, mcts_explore, node.visits.read().unwrap())));
+                children_sorted.push((child.0, mcts_score(child.1, mcts_explore, *node.visits.read().unwrap(), node.board.is_w_move)));
             }
-            children_sorted.sort_unstable_by(|a, b| a.1 > b.1);
 
-            node = &children[&children_sorted[0].0];
+            children_sorted.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+            node = Arc::clone(&children[children_sorted[0].0]);
             let mut threads = node.proc_threads.write().unwrap();
             *threads += 1;
 
@@ -215,35 +221,28 @@ fn find_leaf_node (root: &Arc<Node>, mcts_explore: u32) -> (Arc<Node>, RwLockWri
             Ok(g) => return (node, g),
             Err(_) => {
                 decr_proc_threads(node);
-                node = root;
+                node = Arc::clone(root);
             }
         }
     }
 }
 
-fn mcts_score(node: &Node, mcts_explore: u32, parent_visits: u32) -> f32 {
-    let my_move = if node.height.read().unwrap() % 2 == 0 {
-            true
-        }
-        else {
-            false
-        };
-
-    let eval = node.eval.read().unwrap();
-    let visits = node.visits.read().unwrap();
-    let threads = node.proc_threads.read().unwrap();
+fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move: bool) -> f32 {
+    let eval = *node.eval.read().unwrap();
+    let visits = *node.visits.read().unwrap();
+    let threads = *node.proc_threads.read().unwrap();
     let explore = ((parent_visits as f32).ln() / ((visits as f32) + AVG_CHILD_COUNT * (threads as f32))).sqrt();
-    let scale = ((mcts_explore as f32) / 50.0 - 1.0).exp2();
+    let scale = 4.0_f32.powf((mcts_explore as f32) / 50.0 - 1.0);
 
-    if my_move {
+    let score = eval + scale * explore;
+    if is_w_move {
         eval + scale * explore
-    }
-    else {
-        (1 - eval) + scale * explore
+    } else {
+        (1.0 - eval) + scale * explore
     }
 }
 
-fn decr_proc_threads(node: &Node) {
+fn decr_proc_threads(node: Arc<Node>) {
     
 }
 
@@ -251,6 +250,78 @@ fn propogate_values(node: &Node) {
 
 }
 
-fn stop_searching(root: &Node, start_time: &Instant, go_parms: &Arc<UciGo>, move_overhead: u32, move_speed: u32, mcts_hash: u32) -> bool {
-    false
+fn stop_searching(root: &Arc<Node>, start_time: &Instant, go_parms: &UciGo, move_overhead: i32, move_speed: i32, mcts_hash: i32) -> bool {
+    if root.children.read().unwrap().len() < 2 {
+        return true;
+    }
+    if *root.visits.read().unwrap() * BYTES_PER_NODE > u32::try_from(mcts_hash).unwrap() * 1048576 {
+        return true;
+    }
+    match *go_parms {
+        Time{wtime, winc, btime, binc, movestogo} => {
+            let (time_left, time_inc) = if root.board.is_w_move {
+                    (wtime, winc)
+                }
+                else {
+                    (btime, binc)
+                };
+            let time_inc = match time_inc {
+                Some(t) => t,
+                None => 0,
+            };
+
+            let m_to_go = match movestogo {
+                Some(s) => s,
+                None => cmp::min(misc::eval_to_movestogo(*root.eval.read().unwrap()), MAX_GAME_LENGTH),
+            };
+
+            let need_extension = needs_extension(root);
+            let speed = 4.0_f32.powf((move_speed as f32) / 50.0 - 1.0);
+            let nodes = root.visits.read().unwrap();
+            let time_allowed = (m_to_go * time_inc + time_left.unwrap() - u32::try_from(move_overhead).unwrap()) as f32 / (m_to_go as f32 * speed);
+
+            if need_extension {
+                return (time_allowed * TIME_EXTENSION_MULT_MAX) as u128 > start_time.elapsed().as_millis();
+            }
+            else {
+                return time_allowed as u128 > start_time.elapsed().as_millis();
+            }
+        },
+        Depth{plies} => {
+            let depth = root.depth.read().unwrap();
+            *depth > plies
+        },
+        Nodes{count} => {
+            let visits = root.visits.read().unwrap();
+            *visits > count
+        },
+        Movetime{mseconds} => {
+            mseconds > u32::try_from(start_time.elapsed().as_millis()).unwrap()
+        },
+        Infinite => {
+            false
+        },
+    }
+}
+
+
+
+
+
+fn needs_extension(root: &Arc<Node>) -> bool {
+    let mut children_sorted: Vec<(usize, u32)> = Vec::new();
+    let children = root.children.read().unwrap();
+    for child in children.iter().enumerate() {
+        let node = Arc::clone(child.1);
+        children_sorted.push((child.0, *node.visits.read().unwrap()));
+    }
+
+    children_sorted.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    if *children[children_sorted[0].0].eval.read().unwrap() < *children[children_sorted[1].0].eval.read().unwrap() {
+        true
+    }
+    else {
+        false
+    }
 }
