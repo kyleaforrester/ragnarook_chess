@@ -23,6 +23,22 @@ pub struct Board {
     fullmove_clock: u32,
 }
 
+#[derive(PartialEq, Eq)]
+enum PieceType {
+    WP,
+    WN,
+    WB,
+    WR,
+    WQ,
+    WK,
+    BP,
+    BN,
+    BB,
+    BR,
+    BQ,
+    BK,
+}
+
 impl Board {
     pub fn new(fen: &str) -> Board {
         let fen_tokens: Vec<String> = fen.split_ascii_whitespace().map(|x| String::from(x)).collect();
@@ -174,16 +190,67 @@ impl Board {
         let to_ind = to_row * 8 + to_col;
 
         // Find the bitboard responsible for the move
-        let mut bb_s = [self.w_p_bb, self.w_n_bb, self.w_b_bb, self.w_r_bb, self.w_q_bb, self.w_k_bb, self.b_p_bb, self.b_n_bb, self.b_b_bb, self.b_r_bb, self.b_q_bb, self.b_k_bb];
-        let mut from_bb = bb_s.iter_mut().find(|x| **x & (0x1 << from_ind) > 0).expect(&format!("Invalid moves command: {}", mov)).clone();
-        let mut to_bb = bb_s.iter_mut().find(|x| **x & (0x1 << to_ind) > 0);
+        let from_pos = 0x1 << from_ind;
+        let to_pos = 0x1 << to_ind;
+        let from_pt = if self.w_p_bb & from_pos > 0 {
+                PieceType::WP
+            } else if self.w_n_bb & from_pos > 0 {
+                PieceType::WN
+            } else if self.w_b_bb & from_pos > 0 {
+                PieceType::WB
+            } else if self.w_r_bb & from_pos > 0 {
+                PieceType::WR
+            } else if self.w_q_bb & from_pos > 0 {
+                PieceType::WQ
+            } else if self.w_k_bb & from_pos > 0 {
+                PieceType::WK
+            } else if self.b_p_bb & from_pos > 0 {
+                PieceType::BP
+            } else if self.b_n_bb & from_pos > 0 {
+                PieceType::BN
+            } else if self.b_b_bb & from_pos > 0 {
+                PieceType::BB
+            } else if self.b_r_bb & from_pos > 0 {
+                PieceType::BR
+            } else if self.b_q_bb & from_pos > 0 {
+                PieceType::BQ
+            } else if self.b_k_bb & from_pos > 0 {
+                PieceType::BK
+            } else {
+                panic!("Invalid moves command: {}", mov);
+        };
+        let to_pt = if self.w_p_bb & to_pos > 0 {
+                Some(PieceType::WP)
+            } else if self.w_n_bb & to_pos > 0 {
+                Some(PieceType::WN)
+            } else if self.w_b_bb & to_pos > 0 {
+                Some(PieceType::WB)
+            } else if self.w_r_bb & to_pos > 0 {
+                Some(PieceType::WR)
+            } else if self.w_q_bb & to_pos > 0 {
+                Some(PieceType::WQ)
+            } else if self.w_k_bb & to_pos > 0 {
+                Some(PieceType::WK)
+            } else if self.b_p_bb & to_pos > 0 {
+                Some(PieceType::BP)
+            } else if self.b_n_bb & to_pos > 0 {
+                Some(PieceType::BN)
+            } else if self.b_b_bb & to_pos > 0 {
+                Some(PieceType::BB)
+            } else if self.b_r_bb & to_pos > 0 {
+                Some(PieceType::BR)
+            } else if self.b_q_bb & to_pos > 0 {
+                Some(PieceType::BQ)
+            } else if self.b_k_bb & to_pos > 0 {
+                Some(PieceType::BK)
+            } else {
+                None
+        };
 
         // Set the side to move
-        if *from_bb == self.w_p_bb || *from_bb == self.w_n_bb || *from_bb == self.w_b_bb || *from_bb == self.w_r_bb || *from_bb == self.w_q_bb || *from_bb == self.w_k_bb {
-            self.is_w_move = false;
-        }
-        else {
-            self.is_w_move = true;
+        match from_pt {
+            PieceType::WP | PieceType::WN | PieceType::WB | PieceType::WR | PieceType::WQ | PieceType::WK => self.is_w_move = false,
+            _ => self.is_w_move = true,
         }
 
         //Increment move counters
@@ -191,16 +258,16 @@ impl Board {
         self.fullmove_clock += 1;
 
         // White en_passent valid
-        if *from_bb == self.w_p_bb && from_row == 1 && to_row == 3 {
+        if from_pt == PieceType::WP && from_row == 1 && to_row == 3 {
             self.en_passent = 0x1 << (2 * 8 + from_col);
         }
         //Black en_passent valid
-        if *from_bb == self.b_p_bb && from_row == 6 && to_row == 4 {
+        else if from_pt == PieceType::BP && from_row == 6 && to_row == 4 {
             self.en_passent = 0x1 << (5 * 8 + from_col);
         }
 
         // Check for white castling
-        if *from_bb == self.w_k_bb {
+        if from_pt == PieceType::WK {
             //Kingside
             if from_ind == 4 && to_ind == 6 {
                 self.is_w_castle = false;
@@ -216,9 +283,8 @@ impl Board {
                 self.w_r_bb |= 0x8;
             }
         }
-
         // Check for black castling
-        if *from_bb == self.b_k_bb {
+        else if from_pt == PieceType::BK {
             //Kingside
             if from_ind == 60 && to_ind == 62 {
                 self.is_b_castle = false;
@@ -236,12 +302,70 @@ impl Board {
         }
 
         // Delete the landing square
-        match to_bb {
-            Some(bb) => {
-                *bb &= !(0x1 << to_ind);
-                self.halfmove_clock = 0;
+        match to_pt {
+            Some(pt) => match pt {
+                WP => {
+                    self.w_p_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                WN => {
+                    self.w_n_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                WB => {
+                    self.w_b_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                WR => {
+                    self.w_r_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                WQ => {
+                    self.w_q_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                WK => {
+                    self.w_k_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                BP => {
+                    self.b_p_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                BN => {
+                    self.b_n_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                BB => {
+                    self.b_b_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                BR => {
+                    self.b_r_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                BQ => {
+                    self.b_q_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
+                BK => {
+                    self.b_k_bb &= !(to_pos);
+                    self.halfmove_clock = 0;
+                },
             },
             None => (),
+        }
+
+        // Check for en-passent capture
+        if to_pt == None && (from_pt == PieceType::WP || from_pt == PieceType::BP) && to_col != from_col {
+            // Remove captured pawn
+            if from_pt == PieceType::WP {
+                self.b_p_bb &= !(0x1 << (to_ind - 8));
+            }
+            else {
+                self.w_p_bb &= !(0x1 << (to_ind + 8));
+            }
+            self.halfmove_clock = 0;
         }
 
         // Move the piece
@@ -262,15 +386,41 @@ impl Board {
                 }
             },
             //Regular move
-            None => *from_bb |= 0x1 << to_ind,
+            None => match from_pt {
+                WP => self.w_p_bb |= 0x1 << to_ind,
+                WN => self.w_n_bb |= 0x1 << to_ind,
+                WB => self.w_b_bb |= 0x1 << to_ind,
+                WR => self.w_r_bb |= 0x1 << to_ind,
+                WQ => self.w_q_bb |= 0x1 << to_ind,
+                WK => self.w_k_bb |= 0x1 << to_ind,
+                BP => self.b_p_bb |= 0x1 << to_ind,
+                BN => self.b_n_bb |= 0x1 << to_ind,
+                BB => self.b_b_bb |= 0x1 << to_ind,
+                BR => self.b_r_bb |= 0x1 << to_ind,
+                BQ => self.b_q_bb |= 0x1 << to_ind,
+                BK => self.b_k_bb |= 0x1 << to_ind,
+            },
         }
 
         // Check if pawn move to reset halfmove counter
-        if *from_bb == self.w_p_bb || *from_bb == self.b_p_bb {
+        if from_pt == PieceType::WP || from_pt == PieceType::BP {
             self.halfmove_clock = 0;
         }
 
         // Clear moving piece
-        *from_bb &= !(0x1 << from_ind);
+        match from_pt {
+            WP => self.w_p_bb &= !(0x1 << from_ind),
+            WN => self.w_n_bb &= !(0x1 << from_ind),
+            WB => self.w_b_bb &= !(0x1 << from_ind),
+            WR => self.w_r_bb &= !(0x1 << from_ind),
+            WQ => self.w_q_bb &= !(0x1 << from_ind),
+            WK => self.w_k_bb &= !(0x1 << from_ind),
+            BP => self.b_p_bb &= !(0x1 << from_ind),
+            BN => self.b_n_bb &= !(0x1 << from_ind),
+            BB => self.b_b_bb &= !(0x1 << from_ind),
+            BR => self.b_r_bb &= !(0x1 << from_ind),
+            BQ => self.b_q_bb &= !(0x1 << from_ind),
+            BK => self.b_k_bb &= !(0x1 << from_ind),
+        }
     }
 }
