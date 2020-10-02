@@ -5,7 +5,7 @@ use crate::board;
 use crate::move_gen;
 use std::cmp;
 use std::time::{SystemTime, Instant, Duration, UNIX_EPOCH};
-use std::sync::{Weak, RwLock, Mutex, Arc, RwLockWriteGuard};
+use std::sync::{Weak, RwLock, Mutex, Arc};
 use std::convert::TryFrom;
 
 const SEED_XOR: u64 = 0x77de55f9d2fe1e0d;
@@ -59,35 +59,35 @@ pub fn search(root: Arc<Node>, options: Vec<UciOption>, searching: Arc<Mutex<boo
 
     // Unpack UCI options
     let multi_pv = match options.iter().find(|&x| x.name == "MultiPV").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("MultiPV UCI Option should be a UciValue::Spin option!"),
     };
     let move_overhead = match options.iter().find(|&x| x.name == "Move_Overhead").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("Move_Overhead UCI Option should be a UciValue::Spin option!"),
     };
     let move_speed = match options.iter().find(|&x| x.name == "Move_Speed").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("Move_Speed UCI Option should be a UciValue::Spin option!"),
     };
     let mcts_explore = match options.iter().find(|&x| x.name == "MCTS_Explore").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("MCTS_Explore UCI Option should be a UciValue::Spin option!"),
     };
     let mcts_hash = match options.iter().find(|&x| x.name == "MCTS_Hash").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("MCTS_Hash UCI Option should be a UciValue::Spin option!"),
     };
     let skill = match options.iter().find(|&x| x.name == "Skill").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("Skill UCI Option should be a UciValue::Spin option!"),
     };
-    let contempt = match options.iter().find(|&x| x.name == "Contempt").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+    let _contempt = match options.iter().find(|&x| x.name == "Contempt").unwrap().value {
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("Contempt UCI Option should be a UciValue::Spin option!"),
     };
-    let dynamism = match options.iter().find(|&x| x.name == "Dynamism").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+    let _dynamism = match options.iter().find(|&x| x.name == "Dynamism").unwrap().value {
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("Dynamism UCI Option should be a UciValue::Spin option!"),
     };
 
@@ -241,7 +241,7 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
     let explore = ((parent_visits as f32).ln() / ((visits as f32) + AVG_CHILD_COUNT * (threads as f32))).sqrt();
     let scale = 4.0_f32.powf((mcts_explore as f32) / 50.0 - 1.0);
 
-    let score = eval + scale * explore;
+    let _score = eval + scale * explore;
     if is_w_move {
         eval + scale * explore
     } else {
@@ -249,11 +249,11 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
     }
 }
 
-fn decr_proc_threads(node: &Arc<Node>) {
+fn decr_proc_threads(_node: &Arc<Node>) {
     
 }
 
-fn propogate_values(node: &Node) {
+fn propogate_values(_node: &Node) {
 
 }
 
@@ -284,7 +284,7 @@ fn stop_searching(root: &Arc<Node>, start_time: &Instant, go_parms: &UciGo, move
 
             let need_extension = needs_extension(root);
             let speed = 4.0_f32.powf((move_speed as f32) / 50.0 - 1.0);
-            let nodes = root.visits.read().unwrap();
+            let _nodes = root.visits.read().unwrap();
             let time_allowed = (m_to_go * time_inc + time_left.unwrap() - u32::try_from(move_overhead).unwrap()) as f32 / (m_to_go as f32 * speed);
 
             if need_extension {

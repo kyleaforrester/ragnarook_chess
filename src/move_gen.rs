@@ -1,6 +1,6 @@
 use crate::search::{Node};
-use std::sync::{RwLock, Mutex, Arc, RwLockWriteGuard};
+use std::sync::{Arc, RwLockWriteGuard};
 
-pub fn bloom(leaf: &Arc<Node>, guard: RwLockWriteGuard<Vec<Arc<Node>>>) {
+pub fn bloom(_leaf: &Arc<Node>, _guard: RwLockWriteGuard<Vec<Arc<Node>>>) {
 
 }

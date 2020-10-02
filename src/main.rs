@@ -6,7 +6,7 @@ mod move_gen;
 use board::Board;
 use search::Node;
 use std::thread;
-use std::sync::{RwLock, Mutex, Arc};
+use std::sync::{Mutex, Arc};
 use std::io;
 
 #[derive(Clone)]
@@ -52,7 +52,7 @@ const STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 fn main() {
 
     let (mut options, mut root) = initialize();
-    let mut searching = Arc::new(Mutex::new(false));
+    let searching = Arc::new(Mutex::new(false));
 
     println!("Ragnarook 0.1 by Kyle Forrester");
 
@@ -156,7 +156,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
         }
     });
 
-    let mut root = Arc::new(Node::new(Board::new(STARTPOS)));
+    let root = Arc::new(Node::new(Board::new(STARTPOS)));
 
     (options, root)
 }
@@ -168,8 +168,8 @@ fn uci_uci(options: &Vec<UciOption>) {
     for option in options.iter() {
         match option.value{
             UciValue::Button => println!("option name {} type button", option.name),
-            UciValue::Check{value, default} => println!("option name {} type check default {}", option.name, default),
-            UciValue::Spin{value, default, min, max} => println!("option name {} type spin default {} min {} max{}", option.name, default, min, max),
+            UciValue::Check{value: _, default} => println!("option name {} type check default {}", option.name, default),
+            UciValue::Spin{value: _, default, min, max} => println!("option name {} type spin default {} min {} max{}", option.name, default, min, max),
         }
     }
 
@@ -187,7 +187,7 @@ fn uci_setoption(options: &mut Vec<UciOption>, input: Vec<String>) {
     }
 
     //Find the option the user is trying to modify
-    let mut option = match options.iter_mut().find(|x| x.name == input[2]) {
+    let option = match options.iter_mut().find(|x| x.name == input[2]) {
         Some(o) => o,
         None => {
             println!("Unrecognized UCI setoption command");
@@ -197,12 +197,12 @@ fn uci_setoption(options: &mut Vec<UciOption>, input: Vec<String>) {
 
     //Set the option's value to the user input
     match option.value {
-        UciValue::Check{mut value, default} => match input[4].as_str() {
+        UciValue::Check{mut value, default: _} => match input[4].as_str() {
             "true" => value = true,
             "false" => value = false,
             _ => println!("Unrecognized UCI setoption command"),
         },
-        UciValue::Spin{mut value, default, min, max} => match input[4].trim().parse() {
+        UciValue::Spin{mut value, default: _, min: _, max: _} => match input[4].trim().parse() {
             Ok(v) => value = v,
             Err(_) => println!("Unrecognized UCI setoption command"),
         },
@@ -305,11 +305,11 @@ fn uci_go(root: &Arc<Node>, options: &Vec<UciOption>, searching: &Arc<Mutex<bool
 
 
     let threads = match options.iter().find(|&x| x.name == "Threads").unwrap().value {
-        UciValue::Spin{value, default, min, max} => value,
+        UciValue::Spin{value, default: _, min: _, max: _} => value,
         _ => panic!("Threads UCI Option should be a Spin option!"),
     };
 
-    for i in 0..threads-1 {
+    for _i in 0..threads-1 {
         let new_root = Arc::clone(root);
         let new_options = options.clone();
         let new_searching = Arc::clone(searching);
@@ -389,7 +389,7 @@ fn parse_go_movetime(input: Vec<String>) -> UciGo {
     }
 }
 
-fn parse_go_infinite(input: Vec<String>) -> UciGo {
+fn parse_go_infinite(_input: Vec<String>) -> UciGo {
     UciGo::Infinite
 }
 
