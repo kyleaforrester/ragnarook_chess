@@ -58,35 +58,35 @@ pub fn search(root: Arc<Node>, options: Vec<UciOption>, searching: Arc<Mutex<boo
     let mut rng_state: u64 = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64) ^ SEED_XOR;
 
     // Unpack UCI options
-    let multi_pv = match options.iter().find(|&&x| x.name == "MultiPV").unwrap().value {
+    let multi_pv = match options.iter().find(|&x| x.name == "MultiPV").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("MultiPV UCI Option should be a UciValue::Spin option!"),
     };
-    let move_overhead = match options.iter().find(|&&x| x.name == "Move_Overhead").unwrap().value {
+    let move_overhead = match options.iter().find(|&x| x.name == "Move_Overhead").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("Move_Overhead UCI Option should be a UciValue::Spin option!"),
     };
-    let move_speed = match options.iter().find(|&&x| x.name == "Move_Speed").unwrap().value {
+    let move_speed = match options.iter().find(|&x| x.name == "Move_Speed").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("Move_Speed UCI Option should be a UciValue::Spin option!"),
     };
-    let mcts_explore = match options.iter().find(|&&x| x.name == "MCTS_Explore").unwrap().value {
+    let mcts_explore = match options.iter().find(|&x| x.name == "MCTS_Explore").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("MCTS_Explore UCI Option should be a UciValue::Spin option!"),
     };
-    let mcts_hash = match options.iter().find(|&&x| x.name == "MCTS_Hash").unwrap().value {
+    let mcts_hash = match options.iter().find(|&x| x.name == "MCTS_Hash").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("MCTS_Hash UCI Option should be a UciValue::Spin option!"),
     };
-    let skill = match options.iter().find(|&&x| x.name == "Skill").unwrap().value {
+    let skill = match options.iter().find(|&x| x.name == "Skill").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("Skill UCI Option should be a UciValue::Spin option!"),
     };
-    let contempt = match options.iter().find(|&&x| x.name == "Contempt").unwrap().value {
+    let contempt = match options.iter().find(|&x| x.name == "Contempt").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("Contempt UCI Option should be a UciValue::Spin option!"),
     };
-    let dynamism = match options.iter().find(|&&x| x.name == "Dynamism").unwrap().value {
+    let dynamism = match options.iter().find(|&x| x.name == "Dynamism").unwrap().value {
         UciValue::Spin{value, default, min, max} => value,
         _ => panic!("Dynamism UCI Option should be a UciValue::Spin option!"),
     };
@@ -94,9 +94,7 @@ pub fn search(root: Arc<Node>, options: Vec<UciOption>, searching: Arc<Mutex<boo
     while *searching.lock().unwrap() {
         // MutexGuard is already dropped due to not being assigned a variable
         // navigate through the tree to identify leaf node
-        let (leaf, child_lock) = find_leaf_node(&root, mcts_explore);
-        // bloom leaf node
-        move_gen::bloom(&leaf, child_lock);
+        let leaf = find_and_bloom_leaf_node(&root, mcts_explore);
         // propogate values back up the tree
         propogate_values(&leaf);
 
@@ -144,7 +142,7 @@ fn print_info(root: &Arc<Node>, multi_pv: i32, start_time: &Instant) {
 
 fn get_pv(node: &Arc<Node>) -> String {
     let mut pv = String::new();
-    pv.push_str(&node.last_move.unwrap());
+    pv.push_str(node.last_move.as_ref().unwrap());
 
     let mut children_sorted: Vec<(usize, u32)> = Vec::new();
 
@@ -192,17 +190,17 @@ fn print_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) {
     children_sorted.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
     let node = Arc::clone(&children[children_sorted[0].0]);
-    println!("bestmove {}", node.last_move.unwrap());
+    println!("bestmove {}", node.last_move.as_ref().unwrap());
 }
 
-fn find_leaf_node (root: &Arc<Node>, mcts_explore: i32) -> (Arc<Node>, RwLockWriteGuard<Vec<Arc<Node>>>) {
+fn find_and_bloom_leaf_node (root: &Arc<Node>, mcts_explore: i32) -> Arc<Node> {
     let mut node = Arc::clone(root);
 
     loop {
-        let mut children = node.children.read().unwrap();
+        let mut children = node.children.read().unwrap().clone();
         while children.len() > 0 {
             // Continue down the path to the next child
-            let children_sorted: Vec<(usize, f32)> = Vec::new();
+            let mut children_sorted: Vec<(usize, f32)> = Vec::new();
 
             for child in children.iter().enumerate() {
                 children_sorted.push((child.0, mcts_score(child.1, mcts_explore, *node.visits.read().unwrap(), node.board.is_w_move)));
@@ -214,16 +212,25 @@ fn find_leaf_node (root: &Arc<Node>, mcts_explore: i32) -> (Arc<Node>, RwLockWri
             let mut threads = node.proc_threads.write().unwrap();
             *threads += 1;
 
-            children = node.children.read().unwrap();
+            children = node.children.read().unwrap().clone();
         }
 
+        let mut returning = false;
         match node.children.try_write() {
-            Ok(g) => return (node, g),
-            Err(_) => {
-                decr_proc_threads(node);
-                node = Arc::clone(root);
-            }
+            Ok(g) => {
+                move_gen::bloom(&node, g);
+                returning = true;
+            },
+            Err(_) => (),
         }
+
+        if returning {
+            return node;
+        }
+
+        // Failed to lock leaf node, start back at beginning
+        decr_proc_threads(&node);
+        node = Arc::clone(root);
     }
 }
 
@@ -242,7 +249,7 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
     }
 }
 
-fn decr_proc_threads(node: Arc<Node>) {
+fn decr_proc_threads(node: &Arc<Node>) {
     
 }
 

@@ -10,20 +10,20 @@ use std::sync::{RwLock, Mutex, Arc};
 use std::io;
 
 #[derive(Clone)]
-struct UciOption {
+pub struct UciOption {
     value: UciValue,
     name: String,
 }
 
 #[derive(Clone)]
-enum UciValue {
+pub enum UciValue {
     Button,
     Check{value: bool, default: bool},
     Spin{value: i32, default: i32, min: i32, max: i32},
 }
 
 #[derive(Clone)]
-enum UciGo {
+pub enum UciGo {
     Time{wtime: Option<u32>, btime: Option<u32>, winc: Option<u32>, binc: Option<u32>, movestogo: Option<u32>},
     Depth{plies: u32},
     Nodes{count: u32},

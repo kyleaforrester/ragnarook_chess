@@ -156,7 +156,7 @@ impl Board {
         }
     }
 
-    pub fn do_move(&self, mov: &str) {
+    pub fn do_move(&mut self, mov: &str) {
         let mut iter = mov.chars();
         let from_col = iter.next().unwrap();
         let from_row = iter.next().unwrap().to_digit(10).unwrap();
@@ -303,52 +303,52 @@ impl Board {
 
         // Delete the landing square
         match to_pt {
-            Some(pt) => match pt {
-                WP => {
+            Some(ref pt) => match pt {
+                PieceType::WP => {
                     self.w_p_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                WN => {
+                PieceType::WN => {
                     self.w_n_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                WB => {
+                PieceType::WB => {
                     self.w_b_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                WR => {
+                PieceType::WR => {
                     self.w_r_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                WQ => {
+                PieceType::WQ => {
                     self.w_q_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                WK => {
+                PieceType::WK => {
                     self.w_k_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                BP => {
+                PieceType::BP => {
                     self.b_p_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                BN => {
+                PieceType::BN => {
                     self.b_n_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                BB => {
+                PieceType::BB => {
                     self.b_b_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                BR => {
+                PieceType::BR => {
                     self.b_r_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                BQ => {
+                PieceType::BQ => {
                     self.b_q_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
-                BK => {
+                PieceType::BK => {
                     self.b_k_bb &= !(to_pos);
                     self.halfmove_clock = 0;
                 },
@@ -387,18 +387,18 @@ impl Board {
             },
             //Regular move
             None => match from_pt {
-                WP => self.w_p_bb |= 0x1 << to_ind,
-                WN => self.w_n_bb |= 0x1 << to_ind,
-                WB => self.w_b_bb |= 0x1 << to_ind,
-                WR => self.w_r_bb |= 0x1 << to_ind,
-                WQ => self.w_q_bb |= 0x1 << to_ind,
-                WK => self.w_k_bb |= 0x1 << to_ind,
-                BP => self.b_p_bb |= 0x1 << to_ind,
-                BN => self.b_n_bb |= 0x1 << to_ind,
-                BB => self.b_b_bb |= 0x1 << to_ind,
-                BR => self.b_r_bb |= 0x1 << to_ind,
-                BQ => self.b_q_bb |= 0x1 << to_ind,
-                BK => self.b_k_bb |= 0x1 << to_ind,
+                PieceType::WP => self.w_p_bb |= 0x1 << to_ind,
+                PieceType::WN => self.w_n_bb |= 0x1 << to_ind,
+                PieceType::WB => self.w_b_bb |= 0x1 << to_ind,
+                PieceType::WR => self.w_r_bb |= 0x1 << to_ind,
+                PieceType::WQ => self.w_q_bb |= 0x1 << to_ind,
+                PieceType::WK => self.w_k_bb |= 0x1 << to_ind,
+                PieceType::BP => self.b_p_bb |= 0x1 << to_ind,
+                PieceType::BN => self.b_n_bb |= 0x1 << to_ind,
+                PieceType::BB => self.b_b_bb |= 0x1 << to_ind,
+                PieceType::BR => self.b_r_bb |= 0x1 << to_ind,
+                PieceType::BQ => self.b_q_bb |= 0x1 << to_ind,
+                PieceType::BK => self.b_k_bb |= 0x1 << to_ind,
             },
         }
 
@@ -409,18 +409,18 @@ impl Board {
 
         // Clear moving piece
         match from_pt {
-            WP => self.w_p_bb &= !(0x1 << from_ind),
-            WN => self.w_n_bb &= !(0x1 << from_ind),
-            WB => self.w_b_bb &= !(0x1 << from_ind),
-            WR => self.w_r_bb &= !(0x1 << from_ind),
-            WQ => self.w_q_bb &= !(0x1 << from_ind),
-            WK => self.w_k_bb &= !(0x1 << from_ind),
-            BP => self.b_p_bb &= !(0x1 << from_ind),
-            BN => self.b_n_bb &= !(0x1 << from_ind),
-            BB => self.b_b_bb &= !(0x1 << from_ind),
-            BR => self.b_r_bb &= !(0x1 << from_ind),
-            BQ => self.b_q_bb &= !(0x1 << from_ind),
-            BK => self.b_k_bb &= !(0x1 << from_ind),
+            PieceType::WP => self.w_p_bb &= !(0x1 << from_ind),
+            PieceType::WN => self.w_n_bb &= !(0x1 << from_ind),
+            PieceType::WB => self.w_b_bb &= !(0x1 << from_ind),
+            PieceType::WR => self.w_r_bb &= !(0x1 << from_ind),
+            PieceType::WQ => self.w_q_bb &= !(0x1 << from_ind),
+            PieceType::WK => self.w_k_bb &= !(0x1 << from_ind),
+            PieceType::BP => self.b_p_bb &= !(0x1 << from_ind),
+            PieceType::BN => self.b_n_bb &= !(0x1 << from_ind),
+            PieceType::BB => self.b_b_bb &= !(0x1 << from_ind),
+            PieceType::BR => self.b_r_bb &= !(0x1 << from_ind),
+            PieceType::BQ => self.b_q_bb &= !(0x1 << from_ind),
+            PieceType::BK => self.b_k_bb &= !(0x1 << from_ind),
         }
     }
 }
