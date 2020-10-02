@@ -1,13 +1,13 @@
 mod board;
-mod search;
 mod misc;
 mod move_gen;
+mod search;
 
 use board::Board;
 use search::Node;
-use std::thread;
-use std::sync::{Mutex, Arc};
 use std::io;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 #[derive(Clone)]
 pub struct UciOption {
@@ -18,16 +18,36 @@ pub struct UciOption {
 #[derive(Clone)]
 pub enum UciValue {
     Button,
-    Check{value: bool, default: bool},
-    Spin{value: i32, default: i32, min: i32, max: i32},
+    Check {
+        value: bool,
+        default: bool,
+    },
+    Spin {
+        value: i32,
+        default: i32,
+        min: i32,
+        max: i32,
+    },
 }
 
 #[derive(Clone)]
 pub enum UciGo {
-    Time{wtime: Option<u32>, btime: Option<u32>, winc: Option<u32>, binc: Option<u32>, movestogo: Option<u32>},
-    Depth{plies: u32},
-    Nodes{count: u32},
-    Movetime{mseconds: u32},
+    Time {
+        wtime: Option<u32>,
+        btime: Option<u32>,
+        winc: Option<u32>,
+        binc: Option<u32>,
+        movestogo: Option<u32>,
+    },
+    Depth {
+        plies: u32,
+    },
+    Nodes {
+        count: u32,
+    },
+    Movetime {
+        mseconds: u32,
+    },
     Infinite,
 }
 
@@ -50,7 +70,6 @@ enum GoState {
 const STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 fn main() {
-
     let (mut options, mut root) = initialize();
     let searching = Arc::new(Mutex::new(false));
 
@@ -81,7 +100,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 1,
             min: 1,
             max: 2048,
-        }
+        },
     });
     options.push(UciOption {
         name: String::from("MultiPV"),
@@ -90,7 +109,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 1,
             min: 1,
             max: 256,
-        }
+        },
     });
     options.push(UciOption {
         name: String::from("Move_Overhead"),
@@ -99,7 +118,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 100,
             min: 10,
             max: 5000,
-        }
+        },
     });
     options.push(UciOption {
         name: String::from("Move_Speed"),
@@ -108,7 +127,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 50,
             min: 0,
             max: 100,
-        }
+        },
     });
     options.push(UciOption {
         name: String::from("MCTS_Explore"),
@@ -117,7 +136,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 50,
             min: 0,
             max: 100,
-        }
+        },
     });
     options.push(UciOption {
         name: String::from("MCTS_Hash"),
@@ -126,7 +145,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 256,
             min: 16,
             max: 32768,
-        }
+        },
     });
     options.push(UciOption {
         name: String::from("Skill"),
@@ -135,7 +154,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 25,
             min: 0,
             max: 25,
-        }
+        },
     });
     options.push(UciOption {
         name: String::from("Contempt"),
@@ -144,7 +163,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 0,
             min: -100,
             max: 100,
-        }
+        },
     });
     options.push(UciOption {
         name: String::from("Dynamism"),
@@ -153,7 +172,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
             default: 50,
             min: 0,
             max: 100,
-        }
+        },
     });
 
     let root = Arc::new(Node::new(Board::new(STARTPOS)));
@@ -166,10 +185,20 @@ fn uci_uci(options: &Vec<UciOption>) {
     println!("id author Kyle Forrester");
 
     for option in options.iter() {
-        match option.value{
+        match option.value {
             UciValue::Button => println!("option name {} type button", option.name),
-            UciValue::Check{value: _, default} => println!("option name {} type check default {}", option.name, default),
-            UciValue::Spin{value: _, default, min, max} => println!("option name {} type spin default {} min {} max{}", option.name, default, min, max),
+            UciValue::Check { value: _, default } => {
+                println!("option name {} type check default {}", option.name, default)
+            }
+            UciValue::Spin {
+                value: _,
+                default,
+                min,
+                max,
+            } => println!(
+                "option name {} type spin default {} min {} max{}",
+                option.name, default, min, max
+            ),
         }
     }
 
@@ -197,12 +226,20 @@ fn uci_setoption(options: &mut Vec<UciOption>, input: Vec<String>) {
 
     //Set the option's value to the user input
     match option.value {
-        UciValue::Check{mut value, default: _} => match input[4].as_str() {
+        UciValue::Check {
+            mut value,
+            default: _,
+        } => match input[4].as_str() {
             "true" => value = true,
             "false" => value = false,
             _ => println!("Unrecognized UCI setoption command"),
         },
-        UciValue::Spin{mut value, default: _, min: _, max: _} => match input[4].trim().parse() {
+        UciValue::Spin {
+            mut value,
+            default: _,
+            min: _,
+            max: _,
+        } => match input[4].trim().parse() {
             Ok(v) => value = v,
             Err(_) => println!("Unrecognized UCI setoption command"),
         },
@@ -229,44 +266,42 @@ fn uci_position(root: Arc<Node>, input: Vec<String>) -> Arc<Node> {
             "startpos" => {
                 pos_state = PositionState::StartPos;
                 fen = String::from(STARTPOS);
-            },
+            }
             "fen" => {
                 pos_state = PositionState::Fen;
-            },
+            }
             "moves" => {
                 pos_state = PositionState::Moves;
-            },
-            _ => {
-                match pos_state {
-                    PositionState::Initial => {
-                        println!("Unexpected parameter {}!", token);
-                        return root;
-                    },
-                    PositionState::StartPos => {
-                        println!("Unexpected parameter {}!", token);
-                        return root;
-                    },
-                    PositionState::Fen => {
-                        fen_accumulator.push(token.to_string());
-                    },
-                    PositionState::Moves => {
-                        moves_accumulator.push(token.to_string());
-                    }
-                }
             }
+            _ => match pos_state {
+                PositionState::Initial => {
+                    println!("Unexpected parameter {}!", token);
+                    return root;
+                }
+                PositionState::StartPos => {
+                    println!("Unexpected parameter {}!", token);
+                    return root;
+                }
+                PositionState::Fen => {
+                    fen_accumulator.push(token.to_string());
+                }
+                PositionState::Moves => {
+                    moves_accumulator.push(token.to_string());
+                }
+            },
         }
     }
-    
+
     if fen_accumulator.len() > 0 {
         fen = fen_accumulator.join(" ");
     }
-    
+
     //Create the board position
     let mut board = Board::new(&fen);
     for mov in moves_accumulator.iter() {
         board.do_move(mov);
     }
-    
+
     //Set the root node to the current node, child node, or grandchild with matching board
     //If no one matches the board, start a new root node with the correct board
     if root.board.eq(&board) {
@@ -289,7 +324,12 @@ fn uci_position(root: Arc<Node>, input: Vec<String>) -> Arc<Node> {
     Arc::new(Node::new(board))
 }
 
-fn uci_go(root: &Arc<Node>, options: &Vec<UciOption>, searching: &Arc<Mutex<bool>>, input: Vec<String>) {
+fn uci_go(
+    root: &Arc<Node>,
+    options: &Vec<UciOption>,
+    searching: &Arc<Mutex<bool>>,
+    input: Vec<String>,
+) {
     let mut s = searching.lock().unwrap();
     *s = true;
 
@@ -303,13 +343,17 @@ fn uci_go(root: &Arc<Node>, options: &Vec<UciOption>, searching: &Arc<Mutex<bool
         search::search(new_root, new_options, new_searching, new_go_cmd, true);
     });
 
-
     let threads = match options.iter().find(|&x| x.name == "Threads").unwrap().value {
-        UciValue::Spin{value, default: _, min: _, max: _} => value,
+        UciValue::Spin {
+            value,
+            default: _,
+            min: _,
+            max: _,
+        } => value,
         _ => panic!("Threads UCI Option should be a Spin option!"),
     };
 
-    for _i in 0..threads-1 {
+    for _i in 0..threads - 1 {
         let new_root = Arc::clone(root);
         let new_options = options.clone();
         let new_searching = Arc::clone(searching);
@@ -345,16 +389,14 @@ fn parse_go_time(input: Vec<String>) -> UciGo {
             "winc" => state = GoState::WInc,
             "binc" => state = GoState::BInc,
             "movestogo" => state = GoState::Movestogo,
-            _ => {
-                match state {
-                    GoState::WTime => wtime = Some(word.parse().unwrap()),
-                    GoState::BTime => btime = Some(word.parse().unwrap()),
-                    GoState::WInc => winc = Some(word.parse().unwrap()),
-                    GoState::BInc => binc = Some(word.parse().unwrap()),
-                    GoState::Movestogo => movestogo = Some(word.parse().unwrap()),
-                    GoState::Initial => panic!("Go command requires arguments!"),
-                }
-            }
+            _ => match state {
+                GoState::WTime => wtime = Some(word.parse().unwrap()),
+                GoState::BTime => btime = Some(word.parse().unwrap()),
+                GoState::WInc => winc = Some(word.parse().unwrap()),
+                GoState::BInc => binc = Some(word.parse().unwrap()),
+                GoState::Movestogo => movestogo = Some(word.parse().unwrap()),
+                GoState::Initial => panic!("Go command requires arguments!"),
+            },
         }
     }
 
@@ -378,13 +420,13 @@ fn parse_go_depth(input: Vec<String>) -> UciGo {
 }
 
 fn parse_go_nodes(input: Vec<String>) -> UciGo {
-    UciGo::Nodes{
+    UciGo::Nodes {
         count: input[2].parse().unwrap(),
     }
 }
 
 fn parse_go_movetime(input: Vec<String>) -> UciGo {
-    UciGo::Movetime{
+    UciGo::Movetime {
         mseconds: input[2].parse().unwrap(),
     }
 }
@@ -404,6 +446,11 @@ fn uci_quit() {
 
 fn tokenize_stdin() -> Vec<String> {
     let mut input = String::new();
-    io::stdin().read_line(&mut input).expect("Error reading from stdin");
-    input.split_ascii_whitespace().map(|x| String::from(x)).collect()
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Error reading from stdin");
+    input
+        .split_ascii_whitespace()
+        .map(|x| String::from(x))
+        .collect()
 }

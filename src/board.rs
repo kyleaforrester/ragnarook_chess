@@ -1,5 +1,4 @@
-
-#[derive(Eq,PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct Board {
     w_p_bb: u64,
     w_n_bb: u64,
@@ -41,7 +40,10 @@ enum PieceType {
 
 impl Board {
     pub fn new(fen: &str) -> Board {
-        let fen_tokens: Vec<String> = fen.split_ascii_whitespace().map(|x| String::from(x)).collect();
+        let fen_tokens: Vec<String> = fen
+            .split_ascii_whitespace()
+            .map(|x| String::from(x))
+            .collect();
 
         if fen_tokens.len() != 6 {
             panic!("Invalid fen: {}", fen);
@@ -59,7 +61,7 @@ impl Board {
         let mut b_r_bb = 0;
         let mut b_q_bb = 0;
         let mut b_k_bb = 0;
-        
+
         let mut row: u32 = 7;
         let mut col: u32 = 0;
         for c in fen_tokens[0].chars() {
@@ -80,17 +82,12 @@ impl Board {
                 '/' => {
                     row -= 1;
                     col = 0;
-                },
+                }
                 _ => panic!("Invalid character in fen board: {}", c),
             }
         }
 
-        let is_white_move = if fen_tokens[1] == "w" {
-                true
-            }
-            else {
-                false
-            };
+        let is_white_move = if fen_tokens[1] == "w" { true } else { false };
 
         let mut w_castle = false;
         let mut w_q_castle = false;
@@ -193,63 +190,68 @@ impl Board {
         let from_pos = 0x1 << from_ind;
         let to_pos = 0x1 << to_ind;
         let from_pt = if self.w_p_bb & from_pos > 0 {
-                PieceType::WP
-            } else if self.w_n_bb & from_pos > 0 {
-                PieceType::WN
-            } else if self.w_b_bb & from_pos > 0 {
-                PieceType::WB
-            } else if self.w_r_bb & from_pos > 0 {
-                PieceType::WR
-            } else if self.w_q_bb & from_pos > 0 {
-                PieceType::WQ
-            } else if self.w_k_bb & from_pos > 0 {
-                PieceType::WK
-            } else if self.b_p_bb & from_pos > 0 {
-                PieceType::BP
-            } else if self.b_n_bb & from_pos > 0 {
-                PieceType::BN
-            } else if self.b_b_bb & from_pos > 0 {
-                PieceType::BB
-            } else if self.b_r_bb & from_pos > 0 {
-                PieceType::BR
-            } else if self.b_q_bb & from_pos > 0 {
-                PieceType::BQ
-            } else if self.b_k_bb & from_pos > 0 {
-                PieceType::BK
-            } else {
-                panic!("Invalid moves command: {}", mov);
+            PieceType::WP
+        } else if self.w_n_bb & from_pos > 0 {
+            PieceType::WN
+        } else if self.w_b_bb & from_pos > 0 {
+            PieceType::WB
+        } else if self.w_r_bb & from_pos > 0 {
+            PieceType::WR
+        } else if self.w_q_bb & from_pos > 0 {
+            PieceType::WQ
+        } else if self.w_k_bb & from_pos > 0 {
+            PieceType::WK
+        } else if self.b_p_bb & from_pos > 0 {
+            PieceType::BP
+        } else if self.b_n_bb & from_pos > 0 {
+            PieceType::BN
+        } else if self.b_b_bb & from_pos > 0 {
+            PieceType::BB
+        } else if self.b_r_bb & from_pos > 0 {
+            PieceType::BR
+        } else if self.b_q_bb & from_pos > 0 {
+            PieceType::BQ
+        } else if self.b_k_bb & from_pos > 0 {
+            PieceType::BK
+        } else {
+            panic!("Invalid moves command: {}", mov);
         };
         let to_pt = if self.w_p_bb & to_pos > 0 {
-                Some(PieceType::WP)
-            } else if self.w_n_bb & to_pos > 0 {
-                Some(PieceType::WN)
-            } else if self.w_b_bb & to_pos > 0 {
-                Some(PieceType::WB)
-            } else if self.w_r_bb & to_pos > 0 {
-                Some(PieceType::WR)
-            } else if self.w_q_bb & to_pos > 0 {
-                Some(PieceType::WQ)
-            } else if self.w_k_bb & to_pos > 0 {
-                Some(PieceType::WK)
-            } else if self.b_p_bb & to_pos > 0 {
-                Some(PieceType::BP)
-            } else if self.b_n_bb & to_pos > 0 {
-                Some(PieceType::BN)
-            } else if self.b_b_bb & to_pos > 0 {
-                Some(PieceType::BB)
-            } else if self.b_r_bb & to_pos > 0 {
-                Some(PieceType::BR)
-            } else if self.b_q_bb & to_pos > 0 {
-                Some(PieceType::BQ)
-            } else if self.b_k_bb & to_pos > 0 {
-                Some(PieceType::BK)
-            } else {
-                None
+            Some(PieceType::WP)
+        } else if self.w_n_bb & to_pos > 0 {
+            Some(PieceType::WN)
+        } else if self.w_b_bb & to_pos > 0 {
+            Some(PieceType::WB)
+        } else if self.w_r_bb & to_pos > 0 {
+            Some(PieceType::WR)
+        } else if self.w_q_bb & to_pos > 0 {
+            Some(PieceType::WQ)
+        } else if self.w_k_bb & to_pos > 0 {
+            Some(PieceType::WK)
+        } else if self.b_p_bb & to_pos > 0 {
+            Some(PieceType::BP)
+        } else if self.b_n_bb & to_pos > 0 {
+            Some(PieceType::BN)
+        } else if self.b_b_bb & to_pos > 0 {
+            Some(PieceType::BB)
+        } else if self.b_r_bb & to_pos > 0 {
+            Some(PieceType::BR)
+        } else if self.b_q_bb & to_pos > 0 {
+            Some(PieceType::BQ)
+        } else if self.b_k_bb & to_pos > 0 {
+            Some(PieceType::BK)
+        } else {
+            None
         };
 
         // Set the side to move
         match from_pt {
-            PieceType::WP | PieceType::WN | PieceType::WB | PieceType::WR | PieceType::WQ | PieceType::WK => self.is_w_move = false,
+            PieceType::WP
+            | PieceType::WN
+            | PieceType::WB
+            | PieceType::WR
+            | PieceType::WQ
+            | PieceType::WK => self.is_w_move = false,
             _ => self.is_w_move = true,
         }
 
@@ -307,62 +309,64 @@ impl Board {
                 PieceType::WP => {
                     self.w_p_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::WN => {
                     self.w_n_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::WB => {
                     self.w_b_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::WR => {
                     self.w_r_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::WQ => {
                     self.w_q_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::WK => {
                     self.w_k_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::BP => {
                     self.b_p_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::BN => {
                     self.b_n_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::BB => {
                     self.b_b_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::BR => {
                     self.b_r_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::BQ => {
                     self.b_q_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
                 PieceType::BK => {
                     self.b_k_bb &= !(to_pos);
                     self.halfmove_clock = 0;
-                },
+                }
             },
             None => (),
         }
 
         // Check for en-passent capture
-        if to_pt == None && (from_pt == PieceType::WP || from_pt == PieceType::BP) && to_col != from_col {
+        if to_pt == None
+            && (from_pt == PieceType::WP || from_pt == PieceType::BP)
+            && to_col != from_col
+        {
             // Remove captured pawn
             if from_pt == PieceType::WP {
                 self.b_p_bb &= !(0x1 << (to_ind - 8));
-            }
-            else {
+            } else {
                 self.w_p_bb &= !(0x1 << (to_ind + 8));
             }
             self.halfmove_clock = 0;
@@ -384,7 +388,7 @@ impl Board {
                     'Q' => self.w_q_bb |= 0x1 << to_ind,
                     _ => panic!("Invalid promotion piece: {}", c),
                 }
-            },
+            }
             //Regular move
             None => match from_pt {
                 PieceType::WP => self.w_p_bb |= 0x1 << to_ind,

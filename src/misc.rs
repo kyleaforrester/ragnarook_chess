@@ -2,13 +2,11 @@ use std::num::Wrapping;
 
 pub fn eval_to_cp(eval: f32) -> i32 {
     if eval > 0.5 {
-        ((20_000.0*eval - 10_000.0) / (1.0 - eval)).sqrt() as i32
-    }
-    else if eval < 0.5 {
+        ((20_000.0 * eval - 10_000.0) / (1.0 - eval)).sqrt() as i32
+    } else if eval < 0.5 {
         let inverse = 1.0 - eval;
-        ((20_000.0*inverse - 10_000.0) / (1.0 - inverse)).sqrt() as i32
-    }
-    else {
+        ((20_000.0 * inverse - 10_000.0) / (1.0 - inverse)).sqrt() as i32
+    } else {
         0
     }
 }
@@ -28,4 +26,3 @@ pub fn spcg32(state: &u64) -> (u32, u64) {
     let shift = 29 - (new_state.0 >> 61);
     ((new_state.0 >> shift) as u32, new_state.0)
 }
-
