@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Eq, PartialEq)]
 pub struct Board {
     w_p_bb: u64,
@@ -17,7 +19,7 @@ pub struct Board {
     is_w_q_castle: bool,
     is_b_castle: bool,
     is_b_q_castle: bool,
-    en_passent: u64,
+    en_passent: Option<u64>,
     halfmove_clock: u32,
     fullmove_clock: u32,
 }
@@ -104,9 +106,8 @@ impl Board {
             }
         }
 
-        let mut en_passent = 0;
         let en_p_str = &fen_tokens[3];
-        if en_p_str.chars().count() == 2 {
+        let en_passent = if en_p_str.chars().count() == 2 {
             let mut iter = en_p_str.chars();
             let col = iter.next().unwrap();
             let mut row: u32 = iter.next().unwrap().to_digit(10).unwrap();
@@ -123,8 +124,10 @@ impl Board {
                 _ => panic!("Invalid character in fen en passent: {}", col),
             };
 
-            en_passent = 0x1 << (row * 8 + col);
-        }
+            Some(0x1 << (row * 8 + col))
+        } else {
+            None
+        };
 
         let halfmove = fen_tokens[4].parse().unwrap();
         let fullmove = fen_tokens[5].parse().unwrap();
@@ -261,11 +264,13 @@ impl Board {
 
         // White en_passent valid
         if from_pt == PieceType::WP && from_row == 1 && to_row == 3 {
-            self.en_passent = 0x1 << (2 * 8 + from_col);
+            self.en_passent = Some(0x1 << (2 * 8 + from_col));
         }
         //Black en_passent valid
         else if from_pt == PieceType::BP && from_row == 6 && to_row == 4 {
-            self.en_passent = 0x1 << (5 * 8 + from_col);
+            self.en_passent = Some(0x1 << (5 * 8 + from_col));
+        } else {
+            self.en_passent = None;
         }
 
         // Check for white castling
@@ -426,5 +431,136 @@ impl Board {
             PieceType::BQ => self.b_q_bb &= !(0x1 << from_ind),
             PieceType::BK => self.b_k_bb &= !(0x1 << from_ind),
         }
+    }
+}
+
+impl fmt::Display for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut index: i32 = 56;
+        let mut empties: u32 = 0;
+
+        let mut string = String::new();
+        // Stringify the board
+        while index >= 0 {
+            let pt = if self.w_p_bb & (0x1 << index) > 0 {
+                Some(PieceType::WP)
+            } else if self.w_n_bb & (0x1 << index) > 0 {
+                Some(PieceType::WN)
+            } else if self.w_b_bb & (0x1 << index) > 0 {
+                Some(PieceType::WB)
+            } else if self.w_r_bb & (0x1 << index) > 0 {
+                Some(PieceType::WR)
+            } else if self.w_q_bb & (0x1 << index) > 0 {
+                Some(PieceType::WQ)
+            } else if self.w_k_bb & (0x1 << index) > 0 {
+                Some(PieceType::WK)
+            } else if self.b_p_bb & (0x1 << index) > 0 {
+                Some(PieceType::BP)
+            } else if self.b_n_bb & (0x1 << index) > 0 {
+                Some(PieceType::BN)
+            } else if self.b_b_bb & (0x1 << index) > 0 {
+                Some(PieceType::BB)
+            } else if self.b_r_bb & (0x1 << index) > 0 {
+                Some(PieceType::BR)
+            } else if self.b_q_bb & (0x1 << index) > 0 {
+                Some(PieceType::BQ)
+            } else if self.b_k_bb & (0x1 << index) > 0 {
+                Some(PieceType::BK)
+            } else {
+                None
+            };
+
+            if pt.is_some() && empties > 0 {
+                string.push_str(&empties.to_string());
+                empties = 0;
+            }
+
+            match pt {
+                Some(x) => match x {
+                    PieceType::WP => string.push('P'),
+                    PieceType::WN => string.push('N'),
+                    PieceType::WB => string.push('B'),
+                    PieceType::WR => string.push('R'),
+                    PieceType::WQ => string.push('Q'),
+                    PieceType::WK => string.push('K'),
+                    PieceType::BP => string.push('p'),
+                    PieceType::BN => string.push('n'),
+                    PieceType::BB => string.push('b'),
+                    PieceType::BR => string.push('r'),
+                    PieceType::BQ => string.push('q'),
+                    PieceType::BK => string.push('k'),
+                },
+                None => empties += 1,
+            }
+
+            index += 1;
+            if index % 8 == 0 {
+                if empties > 0 {
+                    string.push_str(&empties.to_string());
+                }
+                empties = 0;
+                index -= 16;
+                if index >= 0 {
+                    string.push('/');
+                }
+            }
+        }
+
+        // Add other fen fields
+        string.push(' ');
+        match self.is_w_move {
+            true => string.push('w'),
+            false => string.push('b'),
+        }
+
+        string.push(' ');
+        match self.is_w_castle {
+            true => string.push('K'),
+            false => (),
+        }
+        match self.is_w_q_castle {
+            true => string.push('Q'),
+            false => (),
+        }
+        match self.is_b_castle {
+            true => string.push('k'),
+            false => (),
+        }
+        match self.is_b_q_castle {
+            true => string.push('q'),
+            false => (),
+        }
+        if !(self.is_w_castle || self.is_w_q_castle || self.is_b_castle || self.is_b_q_castle) {
+            string.push('-');
+        }
+
+        string.push(' ');
+        match self.en_passent {
+            Some(ep) => {
+                let row = (index / 8).to_string();
+                let col = match index % 8 {
+                    0 => 'a',
+                    1 => 'b',
+                    2 => 'c',
+                    3 => 'd',
+                    4 => 'e',
+                    5 => 'f',
+                    6 => 'g',
+                    7 => 'h',
+                    _ => panic!("Impossible!"),
+                };
+                string.push(col);
+                string.push_str(&row);
+            }
+            None => string.push('-'),
+        }
+
+        string.push(' ');
+        string.push_str(&self.halfmove_clock.to_string());
+
+        string.push(' ');
+        string.push_str(&self.fullmove_clock.to_string());
+
+        write!(f, "{}", string)
     }
 }

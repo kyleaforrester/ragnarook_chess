@@ -86,6 +86,7 @@ fn main() {
             "go" => uci_go(&root, &options, &searching, input),
             "stop" => uci_stop(&searching),
             "quit" => uci_quit(),
+            "fen" => print_fen(&root),
             _ => println!("Invalid command: {}", input[0]),
         }
     }
@@ -453,4 +454,8 @@ fn tokenize_stdin() -> Vec<String> {
         .split_ascii_whitespace()
         .map(|x| String::from(x))
         .collect()
+}
+
+fn print_fen(root: &Arc<Node>) {
+    println!("{}", root.board);
 }
