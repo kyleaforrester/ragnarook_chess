@@ -459,3 +459,89 @@ fn tokenize_stdin() -> Vec<String> {
 fn print_fen(root: &Arc<Node>) {
     println!("{}", root.board);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tokenize(string: &str) -> Vec<String> {
+        string.split_ascii_whitespace().map(|x| String::from(x)).collect()
+    }
+
+    fn resolve_fen(cmd: &str) -> String {
+        let root = Arc::new(Node::new(Board::new(STARTPOS)));
+        let command_vec = tokenize(cmd);
+        let root = uci_position(root, command_vec);
+
+        root.board.to_string()
+    }
+
+    #[test]
+    fn position_en_passent() {
+        // White moves en_passent
+        assert_eq!(resolve_fen("position fen rnbqkbnr/ppppppp1/7p/4P3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2 moves f7f5"), "rnbqkbnr/ppppp1p1/7p/4Pp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3");
+        // Black moves en_passent
+        assert_eq!(resolve_fen("position startpos moves g1f3 c7c5 h2h3 c5c4 b2b4"), "rnbqkbnr/pp1ppppp/8/8/1Pp5/5N1P/P1PPPPP1/RNBQKB1R b KQkq b3 0 3");
+        // En_passent on file a
+        assert_eq!(resolve_fen("position fen rnbqkbnr/1pppp1pp/5p2/pP6/8/8/P1PPPPPP/RNBQKBNR w KQkq a6 0 3"), "rnbqkbnr/1pppp1pp/5p2/pP6/8/8/P1PPPPPP/RNBQKBNR w KQkq a6 0 3");
+        // En_passent on file a
+        assert_eq!(resolve_fen("position fen rnbqkbnr/ppppp1pp/5p2/1P6/8/8/P1PPPPPP/RNBQKBNR b KQkq - 0 2 moves a7a5"), "rnbqkbnr/1pppp1pp/5p2/pP6/8/8/P1PPPPPP/RNBQKBNR w KQkq a6 0 3");
+        // En_passent on file h
+        assert_eq!(resolve_fen("position fen rnbqkbnr/pppppp1p/8/8/6p1/1P1P4/P1P1PPPP/RNBQKBNR w KQkq - 0 3 moves h2h4"), "rnbqkbnr/pppppp1p/8/8/6pP/1P1P4/P1P1PPP1/RNBQKBNR b KQkq h3 0 3");
+    }
+
+    #[test]
+    fn position_castling() {
+        // White kingside castle
+        assert_eq!(resolve_fen("position fen rnb1kb1r/ppppqppp/5n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4 moves e1g1"), "rnb1kb1r/ppppqppp/5n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 5 4");
+        // White queenside castle
+        assert_eq!(resolve_fen("position fen rnbqk2r/ppp2ppp/4pn2/3p4/1b1P4/2NQB3/PPP1PPPP/R3KBNR w KQkq - 2 5 moves e1c1"), "rnbqk2r/ppp2ppp/4pn2/3p4/1b1P4/2NQB3/PPP1PPPP/2KR1BNR b kq - 3 5");
+        // Black queenside castle
+        assert_eq!(resolve_fen("position fen r3kb1r/pbppqppp/1pn2n2/4p1B1/2B1P3/3P1N1P/PPP2PP1/RN1Q1RK1 b kq - 2 7 moves e8c8"), "2kr1b1r/pbppqppp/1pn2n2/4p1B1/2B1P3/3P1N1P/PPP2PP1/RN1Q1RK1 w - - 3 8");
+        // Black kingside castle
+        assert_eq!(resolve_fen("position fen rnbqk2r/ppp2ppp/4pn2/3p4/1b1P4/2NQB3/PPP1PPPP/R3KBNR w KQkq - 2 5 moves e1c1 e8g8"), "rnbq1rk1/ppp2ppp/4pn2/3p4/1b1P4/2NQB3/PPP1PPPP/2KR1BNR w - - 4 6");
+    }
+
+    #[test]
+    fn position_captures() {
+        //Capture W_P
+        assert_eq!(resolve_fen("position fen rnbqkbnr/pppp1ppp/4p3/5P2/8/8/PPPPP1PP/RNBQKBNR b KQkq - 0 2 moves e6f5"), "rnbqkbnr/pppp1ppp/8/5p2/8/8/PPPPP1PP/RNBQKBNR w KQkq - 0 3");
+        //Capture W_N
+        assert_eq!(resolve_fen("position startpos moves e2e4 d7d5 e4d5"), "rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2");
+        //Capture W_B
+        assert_eq!(resolve_fen("position startpos moves g1f3 e7e5 f3g5 d8g5"), "rnb1kbnr/pppp1ppp/8/4p1q1/8/8/PPPPPPPP/RNBQKB1R w KQkq - 0 3");
+        //Capture W_R
+        assert_eq!(resolve_fen("position startpos moves a2a4 e7e6 a1a3 f8a3"), "rnbqk1nr/pppp1ppp/4p3/8/P7/b7/1PPPPPPP/1NBQKBNR w Kkq - 0 3");
+        //Capture W_Q
+        assert_eq!(resolve_fen("position fen rnbqkbnr/pppppp1p/6p1/7Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2 moves g6h5"), "rnbqkbnr/pppppp1p/8/7p/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 0 3");
+        //Capture B_P
+        assert_eq!(resolve_fen("position startpos moves e2e4 e7e5 g1f3 g8f6 d2d3 d7d6 c1g5 c8g4 f1e2 f8e7 e1g1 e8g8 b1c3 b8c6 d1d2 d8d7 a1b1 a8b8 f1e1 f8e8 g1h1 g8h8"), "1r2r2k/pppqbppp/2np1n2/4p1B1/4P1b1/2NP1N2/PPPQBPPP/1R2R2K w - - 16 12");
+        //Capture B_N
+        assert_eq!(resolve_fen("position fen rnbqkb1r/ppp1pppp/3p1n2/4P3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3 moves e5f6"), "rnbqkb1r/ppp1pppp/3p1P2/8/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 3");
+        //Capture B_B
+        assert_eq!(resolve_fen("position startpos moves a2a4 e7e6 a1a3 f8a3 b2a3"), "rnbqk1nr/pppp1ppp/4p3/8/P7/P7/2PPPPPP/1NBQKBNR b Kkq - 0 3");
+        //Capture B_R
+        assert_eq!(resolve_fen("position fen rnbqkb1r/ppp1pppp/3p1n2/4P3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3 moves e5f6 d8d7 f6g7 e8d8 g7h8Q"), "rnbk1b1Q/pppqpp1p/3p4/8/8/8/PPPP1PPP/RNBQKBNR b KQ - 0 5");
+        //Capture B_Q
+        assert_eq!(resolve_fen("position fen rnbqkb1r/ppp1pppp/3p1n2/4P3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3 moves e5f6 d8d7 f6g7 e8d8 g7h8Q d7h3 g1h3"), "rnbk1b1Q/ppp1pp1p/3p4/8/8/7N/PPPP1PPP/RNBQKB1R b KQ - 0 6");
+    }
+
+    #[test]
+    fn position_promotions() {
+        //Promote W_N
+        //Promote W_B
+        //Promote W_R
+        //Promote W_Q
+        //Promote B_N
+        //Promote B_B
+        //Promote B_R
+        //Promote B_Q
+    }
+
+    #[test]
+    fn position() {
+        // Starting position
+        assert_eq!(resolve_fen("position startpos"), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    }
+
+}

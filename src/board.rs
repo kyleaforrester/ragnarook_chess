@@ -80,13 +80,15 @@ impl Board {
                 'R' => w_r_bb |= 0x1 << (row * 8 + col),
                 'Q' => w_q_bb |= 0x1 << (row * 8 + col),
                 'K' => w_k_bb |= 0x1 << (row * 8 + col),
-                n @ '1'..='8' => col += n.to_digit(10).unwrap(),
+                n @ '1'..='8' => col += n.to_digit(10).unwrap() - 1,
                 '/' => {
                     row -= 1;
                     col = 0;
+                    continue;
                 }
                 _ => panic!("Invalid character in fen board: {}", c),
             }
+            col += 1;
         }
 
         let is_white_move = if fen_tokens[1] == "w" { true } else { false };
@@ -102,6 +104,7 @@ impl Board {
                 'Q' => w_q_castle = true,
                 'k' => b_castle = true,
                 'q' => b_q_castle = true,
+                '-' => (),
                 _ => panic!("Invalid character in fen castling rights: {}", c),
             }
         }
@@ -159,9 +162,9 @@ impl Board {
     pub fn do_move(&mut self, mov: &str) {
         let mut iter = mov.chars();
         let from_col = iter.next().unwrap();
-        let from_row = iter.next().unwrap().to_digit(10).unwrap();
+        let from_row = iter.next().unwrap().to_digit(10).unwrap() - 1;
         let to_col = iter.next().unwrap();
-        let to_row = iter.next().unwrap().to_digit(10).unwrap();
+        let to_row = iter.next().unwrap().to_digit(10).unwrap() - 1;
 
         let from_col = match from_col {
             'a' => 0,
@@ -260,7 +263,9 @@ impl Board {
 
         //Increment move counters
         self.halfmove_clock += 1;
-        self.fullmove_clock += 1;
+        if self.is_w_move {
+            self.fullmove_clock += 1;
+        }
 
         // White en_passent valid
         if from_pt == PieceType::WP && from_row == 1 && to_row == 3 {
@@ -537,7 +542,8 @@ impl fmt::Display for Board {
         string.push(' ');
         match self.en_passent {
             Some(ep) => {
-                let row = (index / 8).to_string();
+                let index = ep.trailing_zeros();
+                let row = ((index / 8) + 1).to_string();
                 let col = match index % 8 {
                     0 => 'a',
                     1 => 'b',
