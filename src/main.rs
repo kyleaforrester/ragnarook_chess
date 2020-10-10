@@ -511,6 +511,68 @@ mod tests {
         assert_eq!(resolve_fen("position fen r3kb1r/pbppqppp/1pn2n2/4p1B1/2B1P3/3P1N1P/PPP2PP1/RN1Q1RK1 b kq - 2 7 moves e8c8"), "2kr1b1r/pbppqppp/1pn2n2/4p1B1/2B1P3/3P1N1P/PPP2PP1/RN1Q1RK1 w - - 3 8");
         // Black kingside castle
         assert_eq!(resolve_fen("position fen rnbqk2r/ppp2ppp/4pn2/3p4/1b1P4/2NQB3/PPP1PPPP/R3KBNR w KQkq - 2 5 moves e1c1 e8g8"), "rnbq1rk1/ppp2ppp/4pn2/3p4/1b1P4/2NQB3/PPP1PPPP/2KR1BNR w - - 4 6");
+
+        // Move white rooks for king and queen castling
+        assert_eq!(
+            resolve_fen("position startpos moves g1f3 e7e5 h1g1"),
+            "rnbqkbnr/pppp1ppp/8/4p3/8/5N2/PPPPPPPP/RNBQKBR1 b Qkq - 1 2"
+        );
+        assert_eq!(
+            resolve_fen("position startpos moves b1c3 e7e5 a1b1"),
+            "rnbqkbnr/pppp1ppp/8/4p3/8/2N5/PPPPPPPP/1RBQKBNR b Kkq - 1 2"
+        );
+        // Capture white rooks for king and queen castling
+        assert_eq!(resolve_fen("position fen rn1qkbnr/pbpppppp/1p6/8/8/2NP2P1/PPP1PP1P/R1BQKBNR b KQkq - 0 3 moves b7h1"), "rn1qkbnr/p1pppppp/1p6/8/8/2NP2P1/PPP1PP1P/R1BQKBNb w Qkq - 0 4");
+        assert_eq!(resolve_fen("position fen rnbqk1nr/ppppppbp/6p1/8/8/1P4P1/P1PPPPBP/RNBQK1NR b KQkq - 2 3 moves g7a1"), "rnbqk1nr/pppppp1p/6p1/8/8/1P4P1/P1PPPPBP/bNBQK1NR w Kkq - 0 4");
+        // Move white king
+        assert_eq!(
+            resolve_fen("position startpos moves e2e4 e7e5 e1e2"),
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPPKPPP/RNBQ1BNR b kq - 1 2"
+        );
+
+        // Move black rooks for king and queen castling
+        assert_eq!(
+            resolve_fen("position startpos moves e2e4 g8f6 e4e5 h8g8"),
+            "rnbqkbr1/pppppppp/5n2/4P3/8/8/PPPP1PPP/RNBQKBNR w KQq - 1 3"
+        );
+        assert_eq!(
+            resolve_fen("position startpos moves e2e4 b8c6 e4e5 a8b8"),
+            "1rbqkbnr/pppppppp/2n5/4P3/8/8/PPPP1PPP/RNBQKBNR w KQk - 1 3"
+        );
+        // Capture black rooks for king and queen castling
+        assert_eq!(
+            resolve_fen("position startpos moves b2b3 g7g6 c1b2 c7c6 b2h8"),
+            "rnbqkbnB/pp1ppp1p/2p3p1/8/8/1P6/P1PPPPPP/RN1QKBNR b KQq - 0 3"
+        );
+        assert_eq!(
+            resolve_fen("position startpos moves g2g3 b7b6 f1g2 e7e5 g2a8"),
+            "Bnbqkbnr/p1pp1ppp/1p6/4p3/8/6P1/PPPPPP1P/RNBQK1NR b KQk - 0 3"
+        );
+        // Move black king
+        assert_eq!(
+            resolve_fen("position startpos moves e2e4 e7e5 e1e2 e8e7"),
+            "rnbq1bnr/ppppkppp/8/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w - - 2 3"
+        );
+    }
+
+    #[test]
+    fn position_promotions() {
+        // W_N
+        assert_eq!(resolve_fen("position fen r1bk1bnr/pppqpPpp/2np4/8/8/8/PPPP1PPP/RNBQKBNR w KQ - 1 5 moves f7g8N"), "r1bk1bNr/pppqp1pp/2np4/8/8/8/PPPP1PPP/RNBQKBNR b KQ - 0 5");
+        // W_B
+        assert_eq!(resolve_fen("position fen r1bk1bnr/pppqpPpp/2np4/8/8/8/PPPP1PPP/RNBQKBNR w KQ - 1 5 moves f7g8B"), "r1bk1bBr/pppqp1pp/2np4/8/8/8/PPPP1PPP/RNBQKBNR b KQ - 0 5");
+        // W_R
+        assert_eq!(resolve_fen("position fen r1bk1bnr/pppqpPpp/2np4/8/8/8/PPPP1PPP/RNBQKBNR w KQ - 1 5 moves f7g8R"), "r1bk1bRr/pppqp1pp/2np4/8/8/8/PPPP1PPP/RNBQKBNR b KQ - 0 5");
+        // W_Q
+        assert_eq!(resolve_fen("position fen r1bk1bnr/pppqpPpp/2np4/8/8/8/PPPP1PPP/RNBQKBNR w KQ - 1 5 moves f7g8Q"), "r1bk1bQr/pppqp1pp/2np4/8/8/8/PPPP1PPP/RNBQKBNR b KQ - 0 5");
+        // B_N
+        assert_eq!(resolve_fen("position fen rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP1pP/R2QKBNR b KQkq - 1 5 moves g2h1n"), "rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP2P/R2QKBNn w Qkq - 0 6");
+        // B_B
+        assert_eq!(resolve_fen("position fen rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP1pP/R2QKBNR b KQkq - 1 5 moves g2h1b"), "rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP2P/R2QKBNb w Qkq - 0 6");
+        // B_R
+        assert_eq!(resolve_fen("position fen rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP1pP/R2QKBNR b KQkq - 1 5 moves g2h1r"), "rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP2P/R2QKBNr w Qkq - 0 6");
+        // B_Q
+        assert_eq!(resolve_fen("position fen rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP1pP/R2QKBNR b KQkq - 1 5 moves g2h1q"), "rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP2P/R2QKBNq w Qkq - 0 6");
     }
 
     #[test]
@@ -547,18 +609,6 @@ mod tests {
         assert_eq!(resolve_fen("position fen rnbqkb1r/ppp1pppp/3p1n2/4P3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3 moves e5f6 d8d7 f6g7 e8d8 g7h8Q"), "rnbk1b1Q/pppqpp1p/3p4/8/8/8/PPPP1PPP/RNBQKBNR b KQ - 0 5");
         //Capture B_Q
         assert_eq!(resolve_fen("position fen rnbqkb1r/ppp1pppp/3p1n2/4P3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3 moves e5f6 d8d7 f6g7 e8d8 g7h8Q d7h3 g1h3"), "rnbk1b1Q/ppp1pp1p/3p4/8/8/7N/PPPP1PPP/RNBQKB1R b KQ - 0 6");
-    }
-
-    #[test]
-    fn position_promotions() {
-        //Promote W_N
-        //Promote W_B
-        //Promote W_R
-        //Promote W_Q
-        //Promote B_N
-        //Promote B_B
-        //Promote B_R
-        //Promote B_Q
     }
 
     #[test]

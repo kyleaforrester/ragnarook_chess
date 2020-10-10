@@ -330,6 +330,11 @@ impl Board {
                 }
                 PieceType::WR => {
                     self.w_r_bb &= !(to_pos);
+                    if to_pos == 0x1 {
+                        self.is_w_q_castle = false;
+                    } else if to_pos == 0x80 {
+                        self.is_w_castle = false;
+                    }
                     self.halfmove_clock = 0;
                 }
                 PieceType::WQ => {
@@ -354,6 +359,11 @@ impl Board {
                 }
                 PieceType::BR => {
                     self.b_r_bb &= !(to_pos);
+                    if to_pos == 0x100000000000000 {
+                        self.is_b_q_castle = false;
+                    } else if to_pos == 0x8000000000000000 {
+                        self.is_b_castle = false;
+                    }
                     self.halfmove_clock = 0;
                 }
                 PieceType::BQ => {
@@ -388,31 +398,53 @@ impl Board {
                 // A promotion!
                 // Add new piece
                 match c {
-                    'n' => self.b_n_bb |= 0x1 << to_ind,
-                    'b' => self.b_b_bb |= 0x1 << to_ind,
-                    'r' => self.b_r_bb |= 0x1 << to_ind,
-                    'q' => self.b_q_bb |= 0x1 << to_ind,
-                    'N' => self.w_n_bb |= 0x1 << to_ind,
-                    'B' => self.w_b_bb |= 0x1 << to_ind,
-                    'R' => self.w_r_bb |= 0x1 << to_ind,
-                    'Q' => self.w_q_bb |= 0x1 << to_ind,
+                    'n' => self.b_n_bb |= to_pos,
+                    'b' => self.b_b_bb |= to_pos,
+                    'r' => self.b_r_bb |= to_pos,
+                    'q' => self.b_q_bb |= to_pos,
+                    'N' => self.w_n_bb |= to_pos,
+                    'B' => self.w_b_bb |= to_pos,
+                    'R' => self.w_r_bb |= to_pos,
+                    'Q' => self.w_q_bb |= to_pos,
                     _ => panic!("Invalid promotion piece: {}", c),
                 }
             }
             //Regular move
             None => match from_pt {
-                PieceType::WP => self.w_p_bb |= 0x1 << to_ind,
-                PieceType::WN => self.w_n_bb |= 0x1 << to_ind,
-                PieceType::WB => self.w_b_bb |= 0x1 << to_ind,
-                PieceType::WR => self.w_r_bb |= 0x1 << to_ind,
-                PieceType::WQ => self.w_q_bb |= 0x1 << to_ind,
-                PieceType::WK => self.w_k_bb |= 0x1 << to_ind,
-                PieceType::BP => self.b_p_bb |= 0x1 << to_ind,
-                PieceType::BN => self.b_n_bb |= 0x1 << to_ind,
-                PieceType::BB => self.b_b_bb |= 0x1 << to_ind,
-                PieceType::BR => self.b_r_bb |= 0x1 << to_ind,
-                PieceType::BQ => self.b_q_bb |= 0x1 << to_ind,
-                PieceType::BK => self.b_k_bb |= 0x1 << to_ind,
+                PieceType::WP => self.w_p_bb |= to_pos,
+                PieceType::WN => self.w_n_bb |= to_pos,
+                PieceType::WB => self.w_b_bb |= to_pos,
+                PieceType::WR => {
+                    self.w_r_bb |= to_pos;
+                    if from_pos == 0x1 {
+                        self.is_w_q_castle = false;
+                    } else if from_pos == 0x80 {
+                        self.is_w_castle = false;
+                    }
+                }
+                PieceType::WQ => self.w_q_bb |= to_pos,
+                PieceType::WK => {
+                    self.w_k_bb |= to_pos;
+                    self.is_w_castle = false;
+                    self.is_w_q_castle = false;
+                }
+                PieceType::BP => self.b_p_bb |= to_pos,
+                PieceType::BN => self.b_n_bb |= to_pos,
+                PieceType::BB => self.b_b_bb |= to_pos,
+                PieceType::BR => {
+                    self.b_r_bb |= to_pos;
+                    if from_pos == 0x100000000000000 {
+                        self.is_b_q_castle = false;
+                    } else if from_pos == 0x8000000000000000 {
+                        self.is_b_castle = false;
+                    }
+                }
+                PieceType::BQ => self.b_q_bb |= to_pos,
+                PieceType::BK => {
+                    self.b_k_bb |= to_pos;
+                    self.is_b_castle = false;
+                    self.is_b_q_castle = false;
+                }
             },
         }
 
