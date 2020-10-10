@@ -465,7 +465,10 @@ mod tests {
     use super::*;
 
     fn tokenize(string: &str) -> Vec<String> {
-        string.split_ascii_whitespace().map(|x| String::from(x)).collect()
+        string
+            .split_ascii_whitespace()
+            .map(|x| String::from(x))
+            .collect()
     }
 
     fn resolve_fen(cmd: &str) -> String {
@@ -481,9 +484,17 @@ mod tests {
         // White moves en_passent
         assert_eq!(resolve_fen("position fen rnbqkbnr/ppppppp1/7p/4P3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2 moves f7f5"), "rnbqkbnr/ppppp1p1/7p/4Pp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3");
         // Black moves en_passent
-        assert_eq!(resolve_fen("position startpos moves g1f3 c7c5 h2h3 c5c4 b2b4"), "rnbqkbnr/pp1ppppp/8/8/1Pp5/5N1P/P1PPPPP1/RNBQKB1R b KQkq b3 0 3");
+        assert_eq!(
+            resolve_fen("position startpos moves g1f3 c7c5 h2h3 c5c4 b2b4"),
+            "rnbqkbnr/pp1ppppp/8/8/1Pp5/5N1P/P1PPPPP1/RNBQKB1R b KQkq b3 0 3"
+        );
         // En_passent on file a
-        assert_eq!(resolve_fen("position fen rnbqkbnr/1pppp1pp/5p2/pP6/8/8/P1PPPPPP/RNBQKBNR w KQkq a6 0 3"), "rnbqkbnr/1pppp1pp/5p2/pP6/8/8/P1PPPPPP/RNBQKBNR w KQkq a6 0 3");
+        assert_eq!(
+            resolve_fen(
+                "position fen rnbqkbnr/1pppp1pp/5p2/pP6/8/8/P1PPPPPP/RNBQKBNR w KQkq a6 0 3"
+            ),
+            "rnbqkbnr/1pppp1pp/5p2/pP6/8/8/P1PPPPPP/RNBQKBNR w KQkq a6 0 3"
+        );
         // En_passent on file a
         assert_eq!(resolve_fen("position fen rnbqkbnr/ppppp1pp/5p2/1P6/8/8/P1PPPPPP/RNBQKBNR b KQkq - 0 2 moves a7a5"), "rnbqkbnr/1pppp1pp/5p2/pP6/8/8/P1PPPPPP/RNBQKBNR w KQkq a6 0 3");
         // En_passent on file h
@@ -507,11 +518,20 @@ mod tests {
         //Capture W_P
         assert_eq!(resolve_fen("position fen rnbqkbnr/pppp1ppp/4p3/5P2/8/8/PPPPP1PP/RNBQKBNR b KQkq - 0 2 moves e6f5"), "rnbqkbnr/pppp1ppp/8/5p2/8/8/PPPPP1PP/RNBQKBNR w KQkq - 0 3");
         //Capture W_N
-        assert_eq!(resolve_fen("position startpos moves e2e4 d7d5 e4d5"), "rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2");
+        assert_eq!(
+            resolve_fen("position startpos moves e2e4 d7d5 e4d5"),
+            "rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2"
+        );
         //Capture W_B
-        assert_eq!(resolve_fen("position startpos moves g1f3 e7e5 f3g5 d8g5"), "rnb1kbnr/pppp1ppp/8/4p1q1/8/8/PPPPPPPP/RNBQKB1R w KQkq - 0 3");
+        assert_eq!(
+            resolve_fen("position startpos moves g1f3 e7e5 f3g5 d8g5"),
+            "rnb1kbnr/pppp1ppp/8/4p1q1/8/8/PPPPPPPP/RNBQKB1R w KQkq - 0 3"
+        );
         //Capture W_R
-        assert_eq!(resolve_fen("position startpos moves a2a4 e7e6 a1a3 f8a3"), "rnbqk1nr/pppp1ppp/4p3/8/P7/b7/1PPPPPPP/1NBQKBNR w Kkq - 0 3");
+        assert_eq!(
+            resolve_fen("position startpos moves a2a4 e7e6 a1a3 f8a3"),
+            "rnbqk1nr/pppp1ppp/4p3/8/P7/b7/1PPPPPPP/1NBQKBNR w Kkq - 0 3"
+        );
         //Capture W_Q
         assert_eq!(resolve_fen("position fen rnbqkbnr/pppppp1p/6p1/7Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2 moves g6h5"), "rnbqkbnr/pppppp1p/8/7p/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 0 3");
         //Capture B_P
@@ -519,7 +539,10 @@ mod tests {
         //Capture B_N
         assert_eq!(resolve_fen("position fen rnbqkb1r/ppp1pppp/3p1n2/4P3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3 moves e5f6"), "rnbqkb1r/ppp1pppp/3p1P2/8/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 3");
         //Capture B_B
-        assert_eq!(resolve_fen("position startpos moves a2a4 e7e6 a1a3 f8a3 b2a3"), "rnbqk1nr/pppp1ppp/4p3/8/P7/P7/2PPPPPP/1NBQKBNR b Kkq - 0 3");
+        assert_eq!(
+            resolve_fen("position startpos moves a2a4 e7e6 a1a3 f8a3 b2a3"),
+            "rnbqk1nr/pppp1ppp/4p3/8/P7/P7/2PPPPPP/1NBQKBNR b Kkq - 0 3"
+        );
         //Capture B_R
         assert_eq!(resolve_fen("position fen rnbqkb1r/ppp1pppp/3p1n2/4P3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3 moves e5f6 d8d7 f6g7 e8d8 g7h8Q"), "rnbk1b1Q/pppqpp1p/3p4/8/8/8/PPPP1PPP/RNBQKBNR b KQ - 0 5");
         //Capture B_Q
@@ -541,7 +564,9 @@ mod tests {
     #[test]
     fn position() {
         // Starting position
-        assert_eq!(resolve_fen("position startpos"), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        assert_eq!(
+            resolve_fen("position startpos"),
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        );
     }
-
 }
