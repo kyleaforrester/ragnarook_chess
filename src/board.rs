@@ -1,27 +1,27 @@
 use std::fmt;
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Board {
-    w_p_bb: u64,
-    w_n_bb: u64,
-    w_b_bb: u64,
-    w_r_bb: u64,
-    w_q_bb: u64,
-    w_k_bb: u64,
-    b_p_bb: u64,
-    b_n_bb: u64,
-    b_b_bb: u64,
-    b_r_bb: u64,
-    b_q_bb: u64,
-    b_k_bb: u64,
+    pub w_p_bb: u64,
+    pub w_n_bb: u64,
+    pub w_b_bb: u64,
+    pub w_r_bb: u64,
+    pub w_q_bb: u64,
+    pub w_k_bb: u64,
+    pub b_p_bb: u64,
+    pub b_n_bb: u64,
+    pub b_b_bb: u64,
+    pub b_r_bb: u64,
+    pub b_q_bb: u64,
+    pub b_k_bb: u64,
     pub is_w_move: bool,
-    is_w_castle: bool,
-    is_w_q_castle: bool,
-    is_b_castle: bool,
-    is_b_q_castle: bool,
-    en_passent: Option<u64>,
-    halfmove_clock: u32,
-    fullmove_clock: u32,
+    pub is_w_castle: bool,
+    pub is_w_q_castle: bool,
+    pub is_b_castle: bool,
+    pub is_b_q_castle: bool,
+    pub en_passent: Option<u64>,
+    pub halfmove_clock: u32,
+    pub fullmove_clock: u32,
 }
 
 #[derive(PartialEq, Eq)]
