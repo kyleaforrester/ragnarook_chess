@@ -383,7 +383,7 @@ def print_rook_magic_numbers():
     print(magic_num_string)
     print('')
 
-    placed_moves_strings = ['{ ' + ','.join([hex(move) for move in moves]) + ' }' for moves in placed_moves]
+    placed_moves_strings = ['\t[' + ','.join([hex(move) for move in moves]) + '],' for moves in placed_moves]
 
     for move in placed_moves_strings:
         print(move)
@@ -397,7 +397,7 @@ def print_bishop_magic_numbers():
     print(magic_num_string)
     print('')
 
-    placed_moves_strings = ['{ ' + ','.join([hex(move) for move in moves]) + ' }' for moves in placed_moves]
+    placed_moves_strings = ['\t[' + ','.join([hex(move) for move in moves]) + '],' for moves in placed_moves]
 
     for move in placed_moves_strings:
         print(move)
