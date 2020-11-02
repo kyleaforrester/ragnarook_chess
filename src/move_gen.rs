@@ -303,3 +303,84 @@ fn gen_queen_moves(leaf: &Arc<Node>) -> Vec<Arc<Node>> {
 fn gen_king_moves(leaf: &Arc<Node>) -> Vec<Arc<Node>> {
     Vec::new()
 }
+
+fn is_attacked(board: Board, by_white: bool, bb: u64) -> bool {
+    if !by_white {
+        // We are white
+        let ally_pieces = board.w_p_bb | board.w_n_bb | board.w_b_bb | board.w_r_bb | board.w_q_bb | board.w_k_bb;
+        let enemy_pieces = board.b_p_bb | board.b_n_bb | board.b_b_bb | board.b_r_bb | board.b_q_bb | board.b_k_bb;
+        let all_pieces = ally_pieces | enemy_pieces;
+        
+        // Check for knight attacks
+        if solo_knight_moves(bb, ally_pieces) & board.b_n_bb > 0 {
+            return true;
+        }
+        // Check for bishop attacks
+        if solo_bishop_moves(bb, ally_pieces, all_pieces) & (board.b_b_bb | board.b_q_bb) > 0 {
+            return true;
+        }
+        // Check for rook attacks
+        if solo_rook_moves(bb, ally_pieces, all_pieces) & (board.b_r_bb | board.b_q_bb) > 0 {
+            return true;
+        }
+        // Check for king attacks
+        if solo_king_moves(bb, ally_pieces) & board.b_k_bb > 0 {
+            return true;
+        }
+        // Check for pawn attacks
+        if solo_pawn_checks(bb, enemy_pieces, true) & board.b_p_bb > 0 {
+            return true;
+        }
+    }
+    else {
+        // We are black
+        let ally_pieces = board.b_p_bb | board.b_n_bb | board.b_b_bb | board.b_r_bb | board.b_q_bb | board.b_k_bb;
+        let enemy_pieces = board.w_p_bb | board.w_n_bb | board.w_b_bb | board.w_r_bb | board.w_q_bb | board.w_k_bb;
+        let all_pieces = ally_pieces | enemy_pieces;
+        
+        // Check for knight attacks
+        if solo_knight_moves(bb, ally_pieces) & board.w_n_bb > 0 {
+            return true;
+        }
+        // Check for bishop attacks
+        if solo_bishop_moves(bb, ally_pieces, all_pieces) & (board.w_b_bb | board.w_q_bb) > 0 {
+            return true;
+        }
+        // Check for rook attacks
+        if solo_rook_moves(bb, ally_pieces, all_pieces) & (board.w_r_bb | board.w_q_bb) > 0 {
+            return true;
+        }
+        // Check for king attacks
+        if solo_king_moves(bb, ally_pieces) & board.w_k_bb > 0 {
+            return true;
+        }
+        // Check for pawn attacks
+        if solo_pawn_checks(bb, enemy_pieces, false) & board.w_p_bb > 0 {
+            return true;
+        }
+    }
+}
+
+fn solo_knight_moves(bb: u64, ally_pieces: u64) -> u64 {
+    let pos = bb.trailing_zeros() as usize;
+    magic::knight_collisions[pos] & ~ally_pieces
+}
+
+fn solo_bishop_moves(bb: u64, ally_pieces: u64, all_pieces: u64) -> u64 {
+    let pos = bb.trailing_zeros() as usize;
+    let occupied_coll = magic::bishop_collisions[pos] & all_pieces;
+    let magic_ind = Wrapping(magic::bishop_magic_numbers[pos]) * Wrapping(occupied_coll) >> 55;
+    magic::bishop_magic_move_sets[pos][magic_ind.0] & ~ally_pieces
+}
+
+fn solo_rook_moves(bb: u64, ally_pieces: u64, all_pieces: u64) -> u64 {
+    let pos = bb.trailing_zeros() as usize;
+    let occupied_coll = magic::rook_collisions[pos] & all_pieces;
+    let magic_ind = Wrapping(magic::rook_magic_numbers[pos]) * Wrapping(occupied_coll) >> 52;
+    magic::rook_magic_move_sets[pos][magic_ind.0] & ~ally_pieces
+}
+
+fn solo_king_moves(bb: u64, ally_pieces: u64) -> u64 {
+    let pos = bb.trailing_zeros() as usize;
+    magic::king_collisions[pos] & ~ally_pieces
+}
