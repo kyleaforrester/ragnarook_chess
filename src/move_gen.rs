@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLockWriteGuard};
 
 use crate::search::{self, Node};
-use create::board::{self, Board, PieceType};
+use crate::board::{self, Board, PieceType};
 
 const a_file_bb: u64 = 0x0101010101010101;
 const b_file_bb: u64 = 0x0202020202020202;
@@ -66,13 +66,13 @@ fn get_piecetype(board: &Board, bb: u64) -> Option<PieceType> {
 fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Node>> {
     let all_pieces = w_pieces | b_pieces;
     let mut children = Vec::new();
-    let mut board = Node.board;
+    let mut board = leaf.board;
 
     if leaf.is_w_move {
         let mut p_bb = board.w_p_bb;
         while p_bb.count_ones() > 0 {
             // Reset board
-            board = Node.board;
+            board = leaf.board;
 
             // Gets bitboard with only lsb set
             let lsb_p_bb = p_bb & (~p_bb + 1);
@@ -94,7 +94,7 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
             };
             for promotion in promotions.iter() {
                 // Move ahead one square
-                board = Node.board;
+                board = leaf.board;
                 if one_ahead_bb & all_pieces == 0 {
                     board.w_p_bb &= ~lsb_p_bb;
                     match promotion {
@@ -108,24 +108,32 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
 
                     board.halfmove_clock = 0;
                     board.en_passent = None;
-                    children.push(Arc::new(Node::spawn(leaf, board)));
+                    
+                    //King cannot be in check
+                    if !is_attacked(&board, false, board.w_k_bb) {
+                        children.push(Arc::new(Node::spawn(leaf, board)));
+                    }
                 }
 
                 // Move ahead two squares
-                board = Node.board;
+                board = leaf.board;
                 if lsb_p_bb & rank_2_bb > 0 && one_ahead_bb & all_pieces == 0 && (lsb_p_bb << 16) & all_pieces == 0 {
                     board.w_p_bb &= ~lsb_p_bb;
                     board.w_p_bb |= lsb_p_bb << 16;
                     board.halfmove_clock = 0;
                     board.en_passent = None;
-                    children.push(Arc::new(Node::spawn(leaf, board)));
+
+                    //King cannot be in check
+                    if !is_attacked(&board, false, board.w_k_bb) {
+                        children.push(Arc::new(Node::spawn(leaf, board)));
+                    }
                 }
 
                 // Check for captures
                 for capture_bb in capture_bbs.iter() {
                     let captured_piece = get_piecetype(board, capture_bb & b_pieces);
                     if captured_piece.is_some() {
-                        board = Node.board;
+                        board = leaf.board;
                         board.w_p_bb &= ~lsb_p_bb;
                         match promotion {
                             &PieceType::WP => board.w_p_bb |= capture_bb,
@@ -147,12 +155,16 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
 
                         board.halfmove_clock = 0;
                         board.en_passent = None;
-                        children.push(Arc::new(Node::spawn(leaf, board)));
+
+                        //King cannot be in check
+                        if !is_attacked(&board, false, board.w_k_bb) {
+                            children.push(Arc::new(Node::spawn(leaf, board)));
+                        }
                     }
                 }
 
                 // Check for en-passent
-                board = Node.board;
+                board = leaf.board;
                 match board.en_passent {
                     Some(ep_bb) => {
                         for capture_bb in capture_bbs.iter() {
@@ -162,7 +174,11 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
                                 board.b_p_bb &= ~(ep_bb >> 8);
                                 board.en_passent = None;
                                 board.halfmove_clock = 0;
-                                children.push(Arc::new(Node::spawn(leaf, board)));
+
+                                //King cannot be in check
+                                if !is_attacked(&board, false, board.w_k_bb) {
+                                    children.push(Arc::new(Node::spawn(leaf, board)));
+                                }
                             }
                         }
                     },
@@ -178,7 +194,7 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
         let mut p_bb = board.b_p_bb;
         while p_bb.count_ones() > 0 {
             // Reset board
-            board = Node.board;
+            board = leaf.board;
 
             // Gets bitboard with only lsb set
             let lsb_p_bb = p_bb & (~p_bb + 1);
@@ -200,7 +216,7 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
             };
             for promotion in promotions.iter() {
                 // Move ahead one square
-                board = Node.board;
+                board = leaf.board;
                 if one_ahead_bb & all_pieces == 0 {
                     board.b_p_bb &= ~lsb_p_bb;
                     match promotion {
@@ -214,24 +230,32 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
 
                     board.halfmove_clock = 0;
                     board.en_passent = None;
-                    children.push(Arc::new(Node::spawn(leaf, board)));
+
+                    //King cannot be in check
+                    if !is_attacked(&board, true, board.b_k_bb) {
+                        children.push(Arc::new(Node::spawn(leaf, board)));
+                    }
                 }
 
                 // Move ahead two squares
-                board = Node.board;
+                board = leaf.board;
                 if lsb_p_bb & rank_7_bb > 0 && one_ahead_bb & all_pieces == 0 && (lsb_p_bb >> 16) & all_pieces == 0 {
                     board.b_p_bb &= ~lsb_p_bb;
                     board.b_p_bb |= lsb_p_bb >> 16;
                     board.halfmove_clock = 0;
                     board.en_passent = None;
-                    children.push(Arc::new(Node::spawn(leaf, board)));
+
+                    //King cannot be in check
+                    if !is_attacked(&board, true, board.b_k_bb) {
+                        children.push(Arc::new(Node::spawn(leaf, board)));
+                    }
                 }
 
                 // Check for captures
                 for capture_bb in capture_bbs.iter() {
                     let captured_piece = get_piecetype(board, capture_bb & b_pieces);
                     if captured_piece.is_some() {
-                        board = Node.board;
+                        board = leaf.board;
                         board.b_p_bb &= ~lsb_p_bb;
                         match promotion {
                             &PieceType::BP => board.b_p_bb |= capture_bb,
@@ -253,12 +277,16 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
 
                         board.halfmove_clock = 0;
                         board.en_passent = None;
-                        children.push(Arc::new(Node::spawn(leaf, board)));
+
+                        //King cannot be in check
+                        if !is_attacked(&board, true, board.b_k_bb) {
+                            children.push(Arc::new(Node::spawn(leaf, board)));
+                        }
                     }
                 }
 
                 // Check for en-passent
-                board = Node.board;
+                board = leaf.board;
                 match board.en_passent {
                     Some(ep_bb) => {
                         for capture_bb in capture_bbs.iter() {
@@ -268,7 +296,11 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
                                 board.w_p_bb &= ~(ep_bb << 8);
                                 board.en_passent = None;
                                 board.halfmove_clock = 0;
-                                children.push(Arc::new(Node::spawn(leaf, board)));
+
+                                //King cannot be in check
+                                if !is_attacked(&board, true, board.b_k_bb) {
+                                    children.push(Arc::new(Node::spawn(leaf, board)));
+                                }
                             }
                         }
                     },
@@ -284,27 +316,688 @@ fn gen_pawn_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
     children
 }
 
-fn gen_knight_moves(leaf: &Arc<Node>) -> Vec<Arc<Node>> {
-    Vec::new()
+fn gen_knight_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Node>> {
+    let all_pieces = w_pieces | b_pieces;
+    let mut children = Vec::new();
+    let mut board = leaf.board;
+
+    if leaf.is_w_move {
+        let mut n_bb = board.w_n_bb;
+        while n_bb > 0 {
+            // Gets bitboard with only lsb set
+            let lsb_n_bb = n_bb & (~n_bb + 1);
+
+            let mut solo_n_moves = solo_knight_moves(lsb_n_bb, w_pieces);
+
+            while solo_n_moves > 0 {
+                // Reset board
+                board = leaf.board;
+
+                // Look at next knight move
+                let lsb_solo_n_moves = solo_n_moves & (~solo_n_moves + 1);
+
+                // Strip all enemies away from landing square
+                let captured_pt = get_piecetype(&board, lsb_solo_n_moves);
+                match captured_pt {
+                    Some(pt) => {
+                        match pt {
+                            PieceType::BP => board.b_p_bb &= ~lsb_solo_n_moves,
+                            PieceType::BN => board.b_n_bb &= ~lsb_solo_n_moves,
+                            PieceType::BB => board.b_b_bb &= ~lsb_solo_n_moves,
+                            PieceType::BR => board.b_r_bb &= ~lsb_solo_n_moves,
+                            PieceType::BQ => board.b_q_bb &= ~lsb_solo_n_moves,
+                            _ => panic!(format!("Internal error: white knight cannot capture {}!", pt)),
+                        }
+                    },
+                    None => (),
+                }
+
+                // Move the knight
+                board.w_n_bb |= lsb_solo_n_moves;
+                board.w_n_bb &= ~lsb_n_bb;
+
+                // Update other board fields
+                board.en_passent = None;
+                if captured_pt.is_some() {
+                    board.halfmove_clock = 0;
+                } else {
+                    board.halfmove_clock += 1;
+                }
+
+                // If not in check then add to next moves
+                if !is_attacked(&board, false, board.w_k_bb) {
+                    children.push(Arc::new(Node::spawn(leaf, board)));
+                }
+
+                // Remove LSB on bitboard
+                solo_n_moves &= ~lsb_solo_n_moves;
+            }
+
+            // Remove LSB on bitboard
+            n_bb &= ~lsb_n_bb;
+        }
+    } else {
+        // We are black
+        let mut n_bb = board.b_n_bb;
+        while n_bb > 0 {
+            // Gets bitboard with only lsb set
+            let lsb_n_bb = n_bb & (~n_bb + 1);
+
+            let mut solo_n_moves = solo_knight_moves(lsb_n_bb, b_pieces);
+
+            while solo_n_moves > 0 {
+                // Reset board
+                board = leaf.board;
+
+                // Look at next knight move
+                let lsb_solo_n_moves = solo_n_moves & (~solo_n_moves + 1);
+
+                // Strip all enemies away from landing square
+                let captured_pt = get_piecetype(&board, lsb_solo_n_moves);
+                match captured_pt {
+                    Some(pt) => {
+                        match pt {
+                            PieceType::WP => board.w_p_bb &= ~lsb_solo_n_moves,
+                            PieceType::WN => board.w_n_bb &= ~lsb_solo_n_moves,
+                            PieceType::WB => board.w_b_bb &= ~lsb_solo_n_moves,
+                            PieceType::WR => board.w_r_bb &= ~lsb_solo_n_moves,
+                            PieceType::WQ => board.w_q_bb &= ~lsb_solo_n_moves,
+                            _ => panic!(format!("Internal error: black knight cannot capture {}!", pt)),
+                        }
+                    },
+                    None => (),
+                }
+
+                // Move the knight
+                board.b_n_bb |= lsb_solo_n_moves;
+                board.b_n_bb &= ~lsb_n_bb;
+
+                // Update other board fields
+                board.en_passent = None;
+                if captured_pt.is_some() {
+                    board.halfmove_clock = 0;
+                } else {
+                    board.halfmove_clock += 1;
+                }
+
+                // If not in check then add to next moves
+                if !is_attacked(&board, true, board.b_k_bb) {
+                    children.push(Arc::new(Node::spawn(leaf, board)));
+                }
+
+                // Remove LSB on bitboard
+                solo_n_moves &= ~lsb_solo_n_moves;
+            }
+
+            // Remove LSB on bitboard
+            n_bb &= ~lsb_n_bb;
+        }
+    }
+
+    children
 }
 
 fn gen_bishop_moves(leaf: &Arc<Node>) -> Vec<Arc<Node>> {
-    Vec::new()
+    let all_pieces = w_pieces | b_pieces;
+    let mut children = Vec::new();
+    let mut board = leaf.board;
+
+    if leaf.is_w_move {
+        let mut b_bb = board.w_b_bb;
+        while b_bb > 0 {
+            // Gets bitboard with only lsb set
+            let lsb_b_bb = b_bb & (~b_bb + 1);
+
+            let mut solo_b_moves = solo_bishop_moves(lsb_b_bb, w_pieces, all_pieces);
+
+            while solo_b_moves > 0 {
+                // Reset board
+                board = leaf.board;
+
+                // Look at next bishop move
+                let lsb_solo_b_moves = solo_b_moves & (~solo_b_moves + 1);
+
+                // Strip all enemies away from landing square
+                let captured_pt = get_piecetype(&board, lsb_solo_b_moves);
+                match captured_pt {
+                    Some(pt) => {
+                        match pt {
+                            PieceType::BP => board.b_p_bb &= ~lsb_solo_b_moves,
+                            PieceType::BN => board.b_n_bb &= ~lsb_solo_b_moves,
+                            PieceType::BB => board.b_b_bb &= ~lsb_solo_b_moves,
+                            PieceType::BR => board.b_r_bb &= ~lsb_solo_b_moves,
+                            PieceType::BQ => board.b_q_bb &= ~lsb_solo_b_moves,
+                            _ => panic!(format!("Internal error: white bishop cannot capture {}!", pt)),
+                        }
+                    },
+                    None => (),
+                }
+
+                // Move the bishop 
+                board.w_b_bb |= lsb_solo_b_moves;
+                board.w_b_bb &= ~lsb_b_bb;
+
+                // Update other board fields
+                board.en_passent = None;
+                if captured_pt.is_some() {
+                    board.halfmove_clock = 0;
+                } else {
+                    board.halfmove_clock += 1;
+                }
+
+                // If not in check then add to next moves
+                if !is_attacked(&board, false, board.w_k_bb) {
+                    children.push(Arc::new(Node::spawn(leaf, board)));
+                }
+
+                // Remove LSB on bitboard
+                solo_b_moves &= ~lsb_solo_b_moves;
+            }
+
+            // Remove LSB on bitboard
+            b_bb &= ~lsb_b_bb;
+        }
+    } else {
+        // We are black
+        let mut b_bb = board.b_b_bb;
+        while b_bb > 0 {
+            // Gets bitboard with only lsb set
+            let lsb_b_bb = b_bb & (~b_bb + 1);
+
+            let mut solo_b_moves = solo_bishop_moves(lsb_b_bb, b_pieces, all_pieces);
+
+            while solo_b_moves > 0 {
+                // Reset board
+                board = leaf.board;
+
+                // Look at next knight move
+                let lsb_solo_b_moves = solo_b_moves & (~solo_b_moves + 1);
+
+                // Strip all enemies away from landing square
+                let captured_pt = get_piecetype(&board, lsb_solo_b_moves);
+                match captured_pt {
+                    Some(pt) => {
+                        match pt {
+                            PieceType::WP => board.w_p_bb &= ~lsb_solo_b_moves,
+                            PieceType::WN => board.w_n_bb &= ~lsb_solo_b_moves,
+                            PieceType::WB => board.w_b_bb &= ~lsb_solo_b_moves,
+                            PieceType::WR => board.w_r_bb &= ~lsb_solo_b_moves,
+                            PieceType::WQ => board.w_q_bb &= ~lsb_solo_b_moves,
+                            _ => panic!(format!("Internal error: black bishop cannot capture {}!", pt)),
+                        }
+                    },
+                    None => (),
+                }
+
+                // Move the knight
+                board.b_b_bb |= lsb_solo_b_moves;
+                board.b_b_bb &= ~lsb_b_bb;
+
+                // Update other board fields
+                board.en_passent = None;
+                if captured_pt.is_some() {
+                    board.halfmove_clock = 0;
+                } else {
+                    board.halfmove_clock += 1;
+                }
+
+                // If not in check then add to next moves
+                if !is_attacked(&board, true, board.b_k_bb) {
+                    children.push(Arc::new(Node::spawn(leaf, board)));
+                }
+
+                // Remove LSB on bitboard
+                solo_b_moves &= ~lsb_solo_b_moves;
+            }
+
+            // Remove LSB on bitboard
+            b_bb &= ~lsb_b_bb;
+        }
+    }
+
+    children
 }
 
 fn gen_rook_moves(leaf: &Arc<Node>) -> Vec<Arc<Node>> {
-    Vec::new()
+    let all_pieces = w_pieces | b_pieces;
+    let mut children = Vec::new();
+    let mut board = leaf.board;
+
+    if leaf.is_w_move {
+        let mut r_bb = board.w_r_bb;
+        while r_bb > 0 {
+            // Gets bitboard with only lsb set
+            let lsb_r_bb = r_bb & (~r_bb + 1);
+
+            let mut solo_r_moves = solo_rook_moves(lsb_r_bb, w_pieces, all_pieces);
+
+            while solo_r_moves > 0 {
+                // Reset board
+                board = leaf.board;
+
+                // Look at next rook move
+                let lsb_solo_r_moves = solo_r_moves & (~solo_r_moves + 1);
+
+                // Strip all enemies away from landing square
+                let captured_pt = get_piecetype(&board, lsb_solo_r_moves);
+                match captured_pt {
+                    Some(pt) => {
+                        match pt {
+                            PieceType::BP => board.b_p_bb &= ~lsb_solo_r_moves,
+                            PieceType::BN => board.b_n_bb &= ~lsb_solo_r_moves,
+                            PieceType::BB => board.b_b_bb &= ~lsb_solo_r_moves,
+                            PieceType::BR => board.b_r_bb &= ~lsb_solo_r_moves,
+                            PieceType::BQ => board.b_q_bb &= ~lsb_solo_r_moves,
+                            _ => panic!(format!("Internal error: white rook cannot capture {}!", pt)),
+                        }
+                    },
+                    None => (),
+                }
+
+                // Move the rook 
+                board.w_r_bb |= lsb_solo_r_moves;
+                board.w_r_bb &= ~lsb_r_bb;
+
+                // Update other board fields
+                board.en_passent = None;
+                if captured_pt.is_some() {
+                    board.halfmove_clock = 0;
+                } else {
+                    board.halfmove_clock += 1;
+                }
+                if lsb_r_bb & 0x1 > 0 {
+                    board.is_w_q_castle = false;
+                }
+                else if lsb_r_bb & 0x80 > 0 {
+                    board.is_w_castle = false;
+                }
+
+                // If not in check then add to next moves
+                if !is_attacked(&board, false, board.w_k_bb) {
+                    children.push(Arc::new(Node::spawn(leaf, board)));
+                }
+
+                // Remove LSB on bitboard
+                solo_r_moves &= ~lsb_solo_r_moves;
+            }
+
+            // Remove LSB on bitboard
+            r_bb &= ~lsb_r_bb;
+        }
+    } else {
+        // We are black
+        let mut r_bb = board.b_r_bb;
+        while r_bb > 0 {
+            // Gets bitboard with only lsb set
+            let lsb_r_bb = r_bb & (~r_bb + 1);
+
+            let mut solo_r_moves = solo_rook_moves(lsb_r_bb, b_pieces, all_pieces);
+
+            while solo_r_moves > 0 {
+                // Reset board
+                board = leaf.board;
+
+                // Look at next rook move
+                let lsb_solo_r_moves = solo_r_moves & (~solo_r_moves + 1);
+
+                // Strip all enemies away from landing square
+                let captured_pt = get_piecetype(&board, lsb_solo_r_moves);
+                match captured_pt {
+                    Some(pt) => {
+                        match pt {
+                            PieceType::WP => board.w_p_bb &= ~lsb_solo_r_moves,
+                            PieceType::WN => board.w_n_bb &= ~lsb_solo_r_moves,
+                            PieceType::WB => board.w_b_bb &= ~lsb_solo_r_moves,
+                            PieceType::WR => board.w_r_bb &= ~lsb_solo_r_moves,
+                            PieceType::WQ => board.w_q_bb &= ~lsb_solo_r_moves,
+                            _ => panic!(format!("Internal error: black rook cannot capture {}!", pt)),
+                        }
+                    },
+                    None => (),
+                }
+
+                // Move the rook
+                board.b_r_bb |= lsb_solo_r_moves;
+                board.b_r_bb &= ~lsb_r_bb;
+
+                // Update other board fields
+                board.en_passent = None;
+                if captured_pt.is_some() {
+                    board.halfmove_clock = 0;
+                } else {
+                    board.halfmove_clock += 1;
+                }
+                if lsb_r_bb & 0x100000000000000 > 0 {
+                    board.is_b_q_castle = false;
+                }
+                else if lsb_r_bb & 0x8000000000000000 > 0 {
+                    board.is_b_castle = false;
+                }
+
+                // If not in check then add to next moves
+                if !is_attacked(&board, true, board.b_k_bb) {
+                    children.push(Arc::new(Node::spawn(leaf, board)));
+                }
+
+                // Remove LSB on bitboard
+                solo_r_moves &= ~lsb_solo_r_moves;
+            }
+
+            // Remove LSB on bitboard
+            r_bb &= ~lsb_r_bb;
+        }
+    }
+
+    children
 }
 
 fn gen_queen_moves(leaf: &Arc<Node>) -> Vec<Arc<Node>> {
-    Vec::new()
+    let all_pieces = w_pieces | b_pieces;
+    let mut children = Vec::new();
+    let mut board = leaf.board;
+
+    if leaf.is_w_move {
+        let mut q_bb = board.w_q_bb;
+        while q_bb > 0 {
+            // Gets bitboard with only lsb set
+            let lsb_q_bb = q_bb & (~q_bb + 1);
+
+            let mut solo_q_moves = solo_rook_moves(lsb_q_bb, w_pieces, all_pieces) | solo_bishop_moves(lsb_q_bb, w_pieces, all_pieces);
+
+            while solo_q_moves > 0 {
+                // Reset board
+                board = leaf.board;
+
+                // Look at next queen move
+                let lsb_solo_q_moves = solo_q_moves & (~solo_q_moves + 1);
+
+                // Strip all enemies away from landing square
+                let captured_pt = get_piecetype(&board, lsb_solo_q_moves);
+                match captured_pt {
+                    Some(pt) => {
+                        match pt {
+                            PieceType::BP => board.b_p_bb &= ~lsb_solo_q_moves,
+                            PieceType::BN => board.b_n_bb &= ~lsb_solo_q_moves,
+                            PieceType::BB => board.b_b_bb &= ~lsb_solo_q_moves,
+                            PieceType::BR => board.b_r_bb &= ~lsb_solo_q_moves,
+                            PieceType::BQ => board.b_q_bb &= ~lsb_solo_q_moves,
+                            _ => panic!(format!("Internal error: white queen cannot capture {}!", pt)),
+                        }
+                    },
+                    None => (),
+                }
+
+                // Move the queen 
+                board.w_q_bb |= lsb_solo_q_moves;
+                board.w_q_bb &= ~lsb_q_bb;
+
+                // Update other board fields
+                board.en_passent = None;
+                if captured_pt.is_some() {
+                    board.halfmove_clock = 0;
+                } else {
+                    board.halfmove_clock += 1;
+                }
+
+                // If not in check then add to next moves
+                if !is_attacked(&board, false, board.w_k_bb) {
+                    children.push(Arc::new(Node::spawn(leaf, board)));
+                }
+
+                // Remove LSB on bitboard
+                solo_q_moves &= ~lsb_solo_q_moves;
+            }
+
+            // Remove LSB on bitboard
+            q_bb &= ~lsb_q_bb;
+        }
+    } else {
+        // We are black
+        let mut q_bb = board.b_q_bb;
+        while q_bb > 0 {
+            // Gets bitboard with only lsb set
+            let lsb_q_bb = q_bb & (~q_bb + 1);
+
+            let mut solo_q_moves = solo_rook_moves(lsb_q_bb, b_pieces, all_pieces) | solo_bishop_moves(lsb_q_bb, b_pieces, all_pieces);
+
+            while solo_q_moves > 0 {
+                // Reset board
+                board = leaf.board;
+
+                // Look at next queen move
+                let lsb_solo_q_moves = solo_q_moves & (~solo_q_moves + 1);
+
+                // Strip all enemies away from landing square
+                let captured_pt = get_piecetype(&board, lsb_solo_q_moves);
+                match captured_pt {
+                    Some(pt) => {
+                        match pt {
+                            PieceType::WP => board.w_p_bb &= ~lsb_solo_q_moves,
+                            PieceType::WN => board.w_n_bb &= ~lsb_solo_q_moves,
+                            PieceType::WB => board.w_b_bb &= ~lsb_solo_q_moves,
+                            PieceType::WR => board.w_r_bb &= ~lsb_solo_q_moves,
+                            PieceType::WQ => board.w_q_bb &= ~lsb_solo_q_moves,
+                            _ => panic!(format!("Internal error: black queen cannot capture {}!", pt)),
+                        }
+                    },
+                    None => (),
+                }
+
+                // Move the queen
+                board.b_q_bb |= lsb_solo_q_moves;
+                board.b_q_bb &= ~lsb_q_bb;
+
+                // Update other board fields
+                board.en_passent = None;
+                if captured_pt.is_some() {
+                    board.halfmove_clock = 0;
+                } else {
+                    board.halfmove_clock += 1;
+                }
+
+                // If not in check then add to next moves
+                if !is_attacked(&board, true, board.b_k_bb) {
+                    children.push(Arc::new(Node::spawn(leaf, board)));
+                }
+
+                // Remove LSB on bitboard
+                solo_q_moves &= ~lsb_solo_q_moves;
+            }
+
+            // Remove LSB on bitboard
+            q_bb &= ~lsb_q_bb;
+        }
+    }
+
+    children
 }
 
-fn gen_king_moves(leaf: &Arc<Node>) -> Vec<Arc<Node>> {
-    Vec::new()
+fn gen_king_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Node>> {
+    let all_pieces = w_pieces | b_pieces;
+    let mut children = Vec::new();
+    let mut board = leaf.board;
+
+    if leaf.is_w_move {
+        // Castling moves
+        // Kingside
+        if board.is_w_castle && w_pieces & 0x60 == 0 && !is_attacked(&board, false, board.w_k_bb) && !is_attacked(&board, false, 0x20) && !is_attacked(&board, false, 0x40) {
+            // Move rook
+            board.w_r_bb &= ~0x80;
+            board.w_r_bb |= 0x20;
+
+            // Move king
+            board.w_k_bb = 0x40;
+
+            // Other board changes
+            board.is_w_castle = false;
+            board.is_w_q_castle = false;
+            board.en_passent = None;
+            board.halfmove_clock += 1;
+
+            children.push(Arc::new(Node::spawn(leaf, board)));
+        }
+        // Queenside
+        board = leaf.board;
+        if board.is_w_q_castle && w_pieces & 0xe == 0 && !is_attacked(&board, false, board.w_k_bb) && !is_attacked(&board, false, 0x4) && !is_attacked(&board, false, 0x8) {
+            // Move rook
+            board.w_r_bb &= ~0x1;
+            board.w_r_bb |= 0x8;
+
+            // Move king
+            board.w_k_bb = 0x4;
+
+            // Other board changes
+            board.is_w_castle = false;
+            board.is_w_q_castle = false;
+            board.en_passent = None;
+            board.halfmove_clock += 1;
+
+            children.push(Arc::new(Node::spawn(leaf, board)));
+        }
+
+        // Standard moves
+        board = leaf.board;
+        let k_bb = board.w_k_bb;
+
+        let mut solo_k_moves = solo_king_moves(k_bb, w_pieces);
+
+        while solo_k_moves > 0 {
+            // Reset board
+            board = leaf.board;
+
+            // Look at next king move
+            let lsb_solo_k_moves = solo_k_moves & (~solo_k_moves + 1);
+
+            // Strip all enemies away from landing square
+            let captured_pt = get_piecetype(&board, lsb_solo_k_moves);
+            match captured_pt {
+                Some(pt) => {
+                    match pt {
+                        PieceType::BP => board.b_p_bb &= ~lsb_solo_k_moves,
+                        PieceType::BN => board.b_n_bb &= ~lsb_solo_k_moves,
+                        PieceType::BB => board.b_b_bb &= ~lsb_solo_k_moves,
+                        PieceType::BR => board.b_r_bb &= ~lsb_solo_k_moves,
+                        PieceType::BQ => board.b_q_bb &= ~lsb_solo_k_moves,
+                        _ => panic!(format!("Internal error: white king cannot capture {}!", pt)),
+                    }
+                },
+                None => (),
+            }
+
+            // Move the king
+            board.w_k_bb |= lsb_solo_k_moves;
+            board.w_k_bb &= k_bb;
+
+            // Update other board fields
+            board.en_passent = None;
+            if captured_pt.is_some() {
+                board.halfmove_clock = 0;
+            } else {
+                board.halfmove_clock += 1;
+            }
+
+            // If not in check then add to next moves
+            if !is_attacked(&board, false, board.w_k_bb) {
+                children.push(Arc::new(Node::spawn(leaf, board)));
+            }
+
+            // Remove LSB on bitboard
+            solo_k_moves &= ~lsb_solo_k_moves;
+        }
+    } else {
+        // We are black
+        // Castling moves
+        // Kingside
+        if board.is_b_castle && b_pieces & 0x6000000000000000 == 0 && !is_attacked(&board, true, board.b_k_bb) && !is_attacked(&board, true, 0x2000000000000000) && !is_attacked(&board, true, 0x4000000000000000) {
+            // Move rook
+            board.b_r_bb &= ~0x8000000000000000;
+            board.b_r_bb |= 0x2000000000000000;
+
+            // Move king
+            board.b_k_bb = 0x4000000000000000;
+
+            // Other board changes
+            board.is_b_castle = false;
+            board.is_b_q_castle = false;
+            board.en_passent = None;
+            board.halfmove_clock += 1;
+
+            children.push(Arc::new(Node::spawn(leaf, board)));
+        }
+        // Queenside
+        board = leaf.board;
+        if board.is_b_q_castle && b_pieces & 0xe00000000000000 == 0 && !is_attacked(&board, true, board.b_k_bb) && !is_attacked(&board, true, 0x400000000000000) && !is_attacked(&board, true, 0x800000000000000) {
+            // Move rook
+            board.b_r_bb &= ~0x100000000000000;
+            board.b_r_bb |= 0x800000000000000;
+
+            // Move king
+            board.b_k_bb = 0x400000000000000;
+
+            // Other board changes
+            board.is_b_castle = false;
+            board.is_b_q_castle = false;
+            board.en_passent = None;
+            board.halfmove_clock += 1;
+
+            children.push(Arc::new(Node::spawn(leaf, board)));
+        }
+
+        // Standard moves
+        board = leaf.board;
+        let k_bb = board.b_k_bb;
+
+        let mut solo_k_moves = solo_king_moves(k_bb, b_pieces);
+
+        while solo_k_moves > 0 {
+            // Reset board
+            board = leaf.board;
+
+            // Look at next king move
+            let lsb_solo_k_moves = solo_k_moves & (~solo_k_moves + 1);
+
+            // Strip all enemies away from landing square
+            let captured_pt = get_piecetype(&board, lsb_solo_k_moves);
+            match captured_pt {
+                Some(pt) => {
+                    match pt {
+                        PieceType::WP => board.w_p_bb &= ~lsb_solo_k_moves,
+                        PieceType::WN => board.w_n_bb &= ~lsb_solo_k_moves,
+                        PieceType::WB => board.w_b_bb &= ~lsb_solo_k_moves,
+                        PieceType::WR => board.w_r_bb &= ~lsb_solo_k_moves,
+                        PieceType::WQ => board.w_q_bb &= ~lsb_solo_k_moves,
+                        _ => panic!(format!("Internal error: black king cannot capture {}!", pt)),
+                    }
+                },
+                None => (),
+            }
+
+            // Move the king
+            board.b_k_bb |= lsb_solo_k_moves;
+            board.b_k_bb &= k_bb;
+
+            // Update other board fields
+            board.en_passent = None;
+            if captured_pt.is_some() {
+                board.halfmove_clock = 0;
+            } else {
+                board.halfmove_clock += 1;
+            }
+
+            // If not in check then add to next moves
+            if !is_attacked(&board, false, board.b_k_bb) {
+                children.push(Arc::new(Node::spawn(leaf, board)));
+            }
+
+            // Remove LSB on bitboard
+            solo_k_moves &= ~lsb_solo_k_moves;
+        }
+    }
+
+    children
 }
 
-fn is_attacked(board: Board, by_white: bool, bb: u64) -> bool {
+fn is_attacked(board: &Board, by_white: bool, bb: u64) -> bool {
     if !by_white {
         // We are white
         let ally_pieces = board.w_p_bb | board.w_n_bb | board.w_b_bb | board.w_r_bb | board.w_q_bb | board.w_k_bb;
@@ -328,7 +1021,7 @@ fn is_attacked(board: Board, by_white: bool, bb: u64) -> bool {
             return true;
         }
         // Check for pawn attacks
-        if solo_pawn_checks(bb, enemy_pieces, true) & board.b_p_bb > 0 {
+        if solo_pawn_attacks(bb, board.b_p_bb, true) > 0 {
             return true;
         }
     }
@@ -355,7 +1048,7 @@ fn is_attacked(board: Board, by_white: bool, bb: u64) -> bool {
             return true;
         }
         // Check for pawn attacks
-        if solo_pawn_checks(bb, enemy_pieces, false) & board.w_p_bb > 0 {
+        if solo_pawn_attacks(bb, board.w_p_bb, false) > 0 {
             return true;
         }
     }
@@ -370,17 +1063,33 @@ fn solo_bishop_moves(bb: u64, ally_pieces: u64, all_pieces: u64) -> u64 {
     let pos = bb.trailing_zeros() as usize;
     let occupied_coll = magic::bishop_collisions[pos] & all_pieces;
     let magic_ind = Wrapping(magic::bishop_magic_numbers[pos]) * Wrapping(occupied_coll) >> 55;
-    magic::bishop_magic_move_sets[pos][magic_ind.0] & ~ally_pieces
+    magic::bishop_magic_move_sets[pos][magic_ind.0 as usize] & ~ally_pieces
 }
 
 fn solo_rook_moves(bb: u64, ally_pieces: u64, all_pieces: u64) -> u64 {
     let pos = bb.trailing_zeros() as usize;
     let occupied_coll = magic::rook_collisions[pos] & all_pieces;
     let magic_ind = Wrapping(magic::rook_magic_numbers[pos]) * Wrapping(occupied_coll) >> 52;
-    magic::rook_magic_move_sets[pos][magic_ind.0] & ~ally_pieces
+    magic::rook_magic_move_sets[pos][magic_ind.0 as usize] & ~ally_pieces
 }
 
 fn solo_king_moves(bb: u64, ally_pieces: u64) -> u64 {
     let pos = bb.trailing_zeros() as usize;
     magic::king_collisions[pos] & ~ally_pieces
 }
+
+fn solo_pawn_attacks(bb: u64, enemy_pawns: u64, is_white: bool) -> u64 {
+    let pos = bb.trailing_zeros() as usize;
+    if is_white {
+        magic::w_pawn_attack_collisions[pos] & enemy_pieces
+    } else {
+        magic::b_pawn_attack_collisions[pos] & enemy_pieces
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+
