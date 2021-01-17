@@ -2,3 +2,5 @@
 *.swp
 Cargo.lock
 __pycache__
+train/data/*
+train/nohup.out
