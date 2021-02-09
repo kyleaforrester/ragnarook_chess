@@ -1,4 +1,6 @@
 mod board;
+mod eval;
+mod magic;
 mod misc;
 mod move_gen;
 mod search;
@@ -126,7 +128,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
         value: UciValue::Spin {
             value: 50,
             default: 50,
-            min: 0,
+            min: 1,
             max: 100,
         },
     });
@@ -135,7 +137,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
         value: UciValue::Spin {
             value: 50,
             default: 50,
-            min: 0,
+            min: 1,
             max: 100,
         },
     });
@@ -151,10 +153,10 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
     options.push(UciOption {
         name: String::from("Skill"),
         value: UciValue::Spin {
-            value: 25,
-            default: 25,
-            min: 0,
-            max: 25,
+            value: 100,
+            default: 100,
+            min: 1,
+            max: 100,
         },
     });
     options.push(UciOption {
@@ -171,7 +173,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
         value: UciValue::Spin {
             value: 50,
             default: 50,
-            min: 0,
+            min: 1,
             max: 100,
         },
     });
@@ -197,7 +199,7 @@ fn uci_uci(options: &Vec<UciOption>) {
                 min,
                 max,
             } => println!(
-                "option name {} type spin default {} min {} max{}",
+                "option name {} type spin default {} min {} max {}",
                 option.name, default, min, max
             ),
         }
@@ -228,20 +230,20 @@ fn uci_setoption(options: &mut Vec<UciOption>, input: Vec<String>) {
     //Set the option's value to the user input
     match option.value {
         UciValue::Check {
-            mut value,
+            ref mut value,
             default: _,
         } => match input[4].as_str() {
-            "true" => value = true,
-            "false" => value = false,
+            "true" => *value = true,
+            "false" => *value = false,
             _ => println!("Unrecognized UCI setoption command"),
         },
         UciValue::Spin {
-            mut value,
+            ref mut value,
             default: _,
             min: _,
             max: _,
         } => match input[4].trim().parse() {
-            Ok(v) => value = v,
+            Ok(v) => *value = v,
             Err(_) => println!("Unrecognized UCI setoption command"),
         },
         _ => println!("Internal Error. UCI property not initialized appropriately."),

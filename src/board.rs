@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Board {
     pub w_p_bb: u64,
     pub w_n_bb: u64,
@@ -25,7 +25,7 @@ pub struct Board {
 }
 
 #[derive(PartialEq, Eq)]
-enum PieceType {
+pub enum PieceType {
     WP,
     WN,
     WB,
@@ -38,6 +38,26 @@ enum PieceType {
     BR,
     BQ,
     BK,
+}
+
+impl fmt::Display for PieceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let string = match self {
+            PieceType::WP => "white pawn",
+            PieceType::WN => "white knight",
+            PieceType::WB => "white bishop",
+            PieceType::WR => "white rook",
+            PieceType::WQ => "white queen",
+            PieceType::WK => "white king",
+            PieceType::BP => "black pawn",
+            PieceType::BN => "black knight",
+            PieceType::BB => "black bishop",
+            PieceType::BR => "black rook",
+            PieceType::BQ => "black queen",
+            PieceType::BK => "black king",
+        };
+        write!(f, "{}", string)
+    }
 }
 
 impl Board {

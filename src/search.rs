@@ -1,4 +1,5 @@
 use crate::board;
+use crate::eval;
 use crate::misc;
 use crate::move_gen;
 use crate::UciGo::{Depth, Infinite, Movetime, Nodes, Time};
@@ -47,6 +48,27 @@ impl Node {
             children: RwLock::new(Vec::new()),
             parent: Weak::new(),
             last_move: None,
+            proc_threads: RwLock::new(0),
+        }
+    }
+
+    pub fn spawn(leaf: &Arc<Node>, mut board: board::Board, last_move: String) -> Node {
+        if board.is_w_move {
+            board.is_w_move = false;
+        } else {
+            board.is_w_move = true;
+            board.fullmove_clock += 1;
+        }
+        let eval = eval::evaluate(&board);
+        Node {
+            board: board,
+            visits: RwLock::new(1),
+            depth: RwLock::new(0),
+            eval: RwLock::new(eval),
+            ending: RwLock::new(None),
+            children: RwLock::new(Vec::new()),
+            parent: Arc::downgrade(leaf),
+            last_move: Some(last_move),
             proc_threads: RwLock::new(0),
         }
     }
@@ -220,7 +242,7 @@ fn print_info(root: &Arc<Node>, multi_pv: i32, start_time: &Instant) {
     let time = start_time.elapsed();
     let nps = (nodes as f32) / time.as_secs_f32();
 
-    for i in 0..cmp::max(multi_pv as usize, children_sorted.len()) {
+    for i in 0..cmp::min(multi_pv as usize, children_sorted.len()) {
         let child = Arc::clone(&children[children_sorted[i].0]);
         let pv = get_pv(&child);
         println!("info multipv {} depth {} seldepth {} time {} nodes {} pv_nodes {} nps {} score cp {} tbhits 0 pv {}", i, depth, depth, time.as_millis(), nodes, child.visits.read().unwrap(), nps, misc::eval_to_cp(*child.eval.read().unwrap()), pv.trim());
@@ -253,7 +275,7 @@ fn print_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) {
     let mut children_sorted: Vec<(usize, f32)> = Vec::new();
     let children = root.children.read().unwrap();
 
-    if skill < 25 {
+    if skill < 100 {
         println!("info Skill set to {}", skill);
 
         let mut rng: u32;
@@ -263,7 +285,7 @@ fn print_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) {
             rng = tmp_rng;
             *rng_state = tmp_rng_state;
             let percent_loss =
-                ((rng as f32) / (std::u32::MAX as f32)) * ((25 - skill) as f32 / 25 as f32) * 2.0;
+                ((rng as f32) / (std::u32::MAX as f32)) * ((100 - skill) as f32 / 100 as f32) * 2.0;
             let actual = *node.visits.read().unwrap() as f32;
             children_sorted.push((child.0, actual - (actual * percent_loss)));
         }
@@ -285,6 +307,7 @@ fn find_and_bloom_leaf_node(root: &Arc<Node>, mcts_explore: i32) -> Arc<Node> {
 
     loop {
         let mut children = node.children.read().unwrap().clone();
+        let mut returning = false;
         while children.len() > 0 {
             // Continue down the path to the next child
             let mut children_sorted: Vec<(usize, f32)> = Vec::new();
@@ -310,7 +333,6 @@ fn find_and_bloom_leaf_node(root: &Arc<Node>, mcts_explore: i32) -> Arc<Node> {
             children = node.children.read().unwrap().clone();
         }
 
-        let mut returning = false;
         match node.children.try_write() {
             Ok(g) => {
                 move_gen::bloom(&node, g);
