@@ -13,7 +13,7 @@ const SEED_XOR: u64 = 0x77de55f9d2fe1e0d;
 const AVG_CHILD_COUNT: f32 = 50.0;
 const MAX_GAME_LENGTH: u32 = 60;
 const TIME_EXTENSION_MULT_MAX: f32 = 3.0;
-const BYTES_PER_NODE: u32 = 1000;
+const BYTES_PER_NODE: u64 = 880;
 
 pub struct Node {
     pub board: board::Board,
@@ -496,6 +496,7 @@ fn find_and_bloom_leaf_node(root: &Arc<Node>, mcts_explore: i32) -> Result<Arc<N
         match node.children.try_write() {
             Ok(g) => {
                 move_gen::bloom(&node, g);
+                *node.depth.write().unwrap() = 1;
                 returning = true;
             }
             Err(_) => (),
@@ -581,8 +582,8 @@ fn propogate_values(leaf: &Arc<Node>) {
 
                 // Update parent depth
                 let c_depth = child.depth.read().unwrap();
-                if *c_depth > *depth {
-                    *depth = *c_depth;
+                if *c_depth + 1 > *depth {
+                    *depth = *c_depth + 1;
                 }
 
                 // Sample child endings
@@ -649,7 +650,7 @@ fn stop_searching(
     if root.children.read().unwrap().len() < 2 {
         return true;
     }
-    if *root.visits.read().unwrap() * BYTES_PER_NODE > u32::try_from(mcts_hash).unwrap() * 1048576 {
+    if u64::try_from(*root.visits.read().unwrap()).unwrap() * BYTES_PER_NODE > u64::try_from(mcts_hash).unwrap() * 1048576 {
         return true;
     }
     match *go_parms {

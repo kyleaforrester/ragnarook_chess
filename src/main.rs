@@ -144,8 +144,8 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
     options.push(UciOption {
         name: String::from("MCTS_Hash"),
         value: UciValue::Spin {
-            value: 256,
-            default: 256,
+            value: 4096,
+            default: 4096,
             min: 16,
             max: 32768,
         },
