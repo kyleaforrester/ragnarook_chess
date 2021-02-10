@@ -29,12 +29,13 @@ pub struct Node {
     proc_threads: RwLock<u32>,
 }
 
+#[derive(Copy, Clone)]
 enum Ending {
     Draw,
     //Win tracks how many moves from mate we are
-    Win(u32),
+    WhiteWin(u32),
     //Loss tracks how many moves from mate we are
-    Loss(u32),
+    BlackWin(u32),
 }
 
 impl Node {
@@ -196,7 +197,10 @@ pub fn search(
     while *searching.lock().unwrap() {
         // MutexGuard is already dropped due to not being assigned a variable
         // navigate through the tree to identify leaf node
-        let leaf = find_and_bloom_leaf_node(&root, mcts_explore);
+        let leaf = match find_and_bloom_leaf_node(&root, mcts_explore) {
+            Ok(n) => n,
+            Err(_) => break,
+        };
         // propogate values back up the tree
         propogate_values(&leaf);
 
@@ -245,7 +249,7 @@ fn print_info(root: &Arc<Node>, multi_pv: i32, start_time: &Instant) {
     for i in 0..cmp::min(multi_pv as usize, children_sorted.len()) {
         let child = Arc::clone(&children[children_sorted[i].0]);
         let pv = get_pv(&child);
-        println!("info multipv {} depth {} seldepth {} time {} nodes {} pv_nodes {} nps {} score cp {} tbhits 0 pv {}", i, depth, depth, time.as_millis(), nodes, child.visits.read().unwrap(), nps, misc::eval_to_cp(*child.eval.read().unwrap()), pv.trim());
+        println!("info multipv {} depth {} seldepth {} time {} nodes {} pv_nodes {} nps {} score cp {} tbhits 0 pv {}", i + 1, depth, depth, time.as_millis(), nodes, child.visits.read().unwrap(), nps, misc::eval_to_cp(*child.eval.read().unwrap()), pv.trim());
     }
 }
 
@@ -275,11 +279,27 @@ fn print_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) {
     let mut children_sorted: Vec<(usize, f32)> = Vec::new();
     let children = root.children.read().unwrap();
 
+    // Check for game endings
+    match best_move_adjudication(root) {
+        Some(m) => {
+            println!("bestmove {}", m);
+            return;
+        }
+        None => (),
+    }
+
+    // Never move into unforced checkmate or draw
+    let valid_children: Vec<&Arc<Node>> = children
+        .iter()
+        .filter(|x| x.ending.read().unwrap().is_none())
+        .collect();
+
+    // Game is not over, select by node count
     if skill < 100 {
         println!("info Skill set to {}", skill);
 
         let mut rng: u32;
-        for child in children.iter().enumerate() {
+        for child in valid_children.iter().enumerate() {
             let node = Arc::clone(child.1);
             let (tmp_rng, tmp_rng_state) = misc::spcg32(rng_state);
             rng = tmp_rng;
@@ -290,7 +310,7 @@ fn print_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) {
             children_sorted.push((child.0, actual - (actual * percent_loss)));
         }
     } else {
-        for child in children.iter().enumerate() {
+        for child in valid_children.iter().enumerate() {
             let node = Arc::clone(child.1);
             children_sorted.push((child.0, *node.visits.read().unwrap() as f32));
         }
@@ -302,35 +322,175 @@ fn print_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) {
     println!("bestmove {}", node.last_move.as_ref().unwrap());
 }
 
-fn find_and_bloom_leaf_node(root: &Arc<Node>, mcts_explore: i32) -> Arc<Node> {
-    let mut node = Arc::clone(root);
+fn best_move_adjudication(root: &Arc<Node>) -> Option<String> {
+    let children = root.children.read().unwrap();
 
-    loop {
-        let mut children = node.children.read().unwrap().clone();
-        let mut returning = false;
-        while children.len() > 0 {
-            // Continue down the path to the next child
-            let mut children_sorted: Vec<(usize, f32)> = Vec::new();
-
+    // Check for game endings
+    match *root.ending.read().unwrap() {
+        Some(e) => {
+            let mut fast_w_win = u32::MAX;
+            let mut slow_w_win = 0;
+            let mut fast_b_win = u32::MAX;
+            let mut slow_b_win = 0;
+            let mut fast_w_node = 0;
+            let mut slow_w_node = 0;
+            let mut fast_b_node = 0;
+            let mut slow_b_node = 0;
             for child in children.iter().enumerate() {
-                children_sorted.push((
-                    child.0,
-                    mcts_score(
-                        child.1,
-                        mcts_explore,
-                        *node.visits.read().unwrap(),
-                        node.board.is_w_move,
-                    ),
-                ));
+                match *child.1.ending.read().unwrap() {
+                    Some(c_e) => match c_e {
+                        Ending::Draw => (),
+                        Ending::WhiteWin(m) => {
+                            if m < fast_w_win {
+                                fast_w_win = m;
+                                fast_w_node = child.0;
+                            }
+                            if m > slow_w_win {
+                                slow_w_win = m;
+                                slow_w_node = child.0;
+                            }
+                        }
+                        Ending::BlackWin(m) => {
+                            if m < fast_b_win {
+                                fast_b_win = m;
+                                fast_b_node = child.0;
+                            }
+                            if m > slow_b_win {
+                                slow_b_win = m;
+                                slow_b_node = child.0;
+                            }
+                        }
+                    },
+                    None => (),
+                }
+            }
+            match e {
+                Ending::Draw => {
+                    // Get a random Draw child
+                    let draw_children: Vec<&Arc<Node>> = children
+                        .iter()
+                        .filter(|x| match *x.ending.read().unwrap() {
+                            Some(e) => match e {
+                                Ending::Draw => true,
+                                Ending::WhiteWin(m) => false,
+                                Ending::BlackWin(m) => false,
+                            },
+                            None => false,
+                        })
+                        .collect();
+                    Some(draw_children[0].last_move.as_ref().unwrap().to_string())
+                }
+                Ending::WhiteWin(m) => {
+                    if root.board.is_w_move {
+                        Some(
+                            children[fast_w_node]
+                                .last_move
+                                .as_ref()
+                                .unwrap()
+                                .to_string(),
+                        )
+                    } else {
+                        Some(
+                            children[slow_w_node]
+                                .last_move
+                                .as_ref()
+                                .unwrap()
+                                .to_string(),
+                        )
+                    }
+                }
+                Ending::BlackWin(m) => {
+                    if root.board.is_w_move {
+                        Some(
+                            children[slow_b_node]
+                                .last_move
+                                .as_ref()
+                                .unwrap()
+                                .to_string(),
+                        )
+                    } else {
+                        Some(
+                            children[fast_b_node]
+                                .last_move
+                                .as_ref()
+                                .unwrap()
+                                .to_string(),
+                        )
+                    }
+                }
+            }
+        }
+        None => {
+            // Check to see if a draw is better than continuing
+            if (root.board.is_w_move && *root.eval.read().unwrap() < 0.5)
+                || (!root.board.is_w_move && *root.eval.read().unwrap() > 0.5)
+            {
+                // Get a random Draw child
+                let draw_children: Vec<&Arc<Node>> = children
+                    .iter()
+                    .filter(|x| match *x.ending.read().unwrap() {
+                        Some(e) => match e {
+                            Ending::Draw => true,
+                            Ending::WhiteWin(m) => false,
+                            Ending::BlackWin(m) => false,
+                        },
+                        None => false,
+                    })
+                    .collect();
+                if draw_children.len() > 0 {
+                    return Some(draw_children[0].last_move.as_ref().unwrap().to_string());
+                }
+            }
+            None
+        }
+    }
+}
+
+fn find_and_bloom_leaf_node(root: &Arc<Node>, mcts_explore: i32) -> Result<Arc<Node>, String> {
+    'outer: loop {
+        if root.ending.read().unwrap().is_some() {
+            return Err("Game Over".to_string());
+        }
+        let mut node = Arc::clone(root);
+        let mut returning = false;
+        let mut placeholder;
+        *node.proc_threads.write().unwrap() += 1;
+
+        'inner: loop {
+            {
+                let children = node.children.read().unwrap();
+                if children.len() == 0 {
+                    break;
+                }
+
+                let valid_children: Vec<&Arc<Node>> = children
+                    .iter()
+                    .filter(|x| x.ending.read().unwrap().is_none())
+                    .collect();
+                if valid_children.len() == 0 {
+                    continue 'outer;
+                }
+
+                let mut children_sorted: Vec<(usize, f32)> = Vec::new();
+                for child in valid_children.iter().enumerate() {
+                    children_sorted.push((
+                        child.0,
+                        mcts_score(
+                            *child.1,
+                            mcts_explore,
+                            *node.visits.read().unwrap(),
+                            node.board.is_w_move,
+                        ),
+                    ));
+                }
+
+                children_sorted.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+                placeholder = Arc::clone(valid_children[children_sorted[0].0]);
             }
 
-            children_sorted.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-            node = Arc::clone(&children[children_sorted[0].0]);
-            let mut threads = node.proc_threads.write().unwrap();
-            *threads += 1;
-
-            children = node.children.read().unwrap().clone();
+            node = Arc::clone(&placeholder);
+            *node.proc_threads.write().unwrap() += 1;
         }
 
         match node.children.try_write() {
@@ -342,12 +502,11 @@ fn find_and_bloom_leaf_node(root: &Arc<Node>, mcts_explore: i32) -> Arc<Node> {
         }
 
         if returning {
-            return node;
+            return Ok(node);
         }
 
         // Failed to lock leaf node, start back at beginning
         decr_proc_threads(&node);
-        node = Arc::clone(root);
     }
 }
 
@@ -360,7 +519,6 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
         .sqrt();
     let scale = 4.0_f32.powf((mcts_explore as f32) / 50.0 - 1.0);
 
-    let _score = eval + scale * explore;
     if is_w_move {
         eval + scale * explore
     } else {
@@ -368,9 +526,117 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
     }
 }
 
-fn decr_proc_threads(_node: &Arc<Node>) {}
+fn decr_proc_threads(node: &Arc<Node>) {
+    loop {
+        let mut new_node = Arc::clone(node);
+        {
+            let mut threads = new_node.proc_threads.write().unwrap();
+            *threads -= 1;
+        }
+        match new_node.parent.upgrade() {
+            Some(a) => new_node = Arc::clone(&a),
+            None => break,
+        }
+    }
+}
 
-fn propogate_values(_node: &Node) {}
+fn propogate_values(leaf: &Arc<Node>) {
+    let mut node = Arc::clone(leaf);
+
+    loop {
+        {
+            let children = node.children.read().unwrap();
+            let mut visits = node.visits.write().unwrap();
+            let mut depth = node.depth.write().unwrap();
+            let mut eval = node.eval.write().unwrap();
+            let mut ending = node.ending.write().unwrap();
+            let mut threads = node.proc_threads.write().unwrap();
+
+            *visits = 0;
+            *threads -= 1;
+
+            let length = children.len();
+            let mut w_wins = 0;
+            let mut b_wins = 0;
+            let mut draws = 0;
+            let mut fast_w_win = u32::MAX;
+            let mut slow_w_win = 0;
+            let mut fast_b_win = u32::MAX;
+            let mut slow_b_win = 0;
+            for child in children.iter() {
+                // Update parent eval
+                let c_eval = child.eval.read().unwrap();
+                if node.board.is_w_move {
+                    if *c_eval > *eval {
+                        *eval = *c_eval;
+                    }
+                } else {
+                    if *c_eval < *eval {
+                        *eval = *c_eval;
+                    }
+                }
+
+                // Update parent visits
+                *visits += *child.visits.read().unwrap();
+
+                // Update parent depth
+                let c_depth = child.depth.read().unwrap();
+                if *c_depth > *depth {
+                    *depth = *c_depth;
+                }
+
+                // Sample child endings
+                match *child.ending.read().unwrap() {
+                    Some(e) => match e {
+                        Ending::Draw => draws += 1,
+                        Ending::WhiteWin(m) => {
+                            w_wins += 1;
+                            if m + 1 < fast_w_win {
+                                fast_w_win = m + 1;
+                            } else if m + 1 > slow_w_win {
+                                slow_w_win = m + 1;
+                            }
+                        }
+                        Ending::BlackWin(m) => {
+                            b_wins += 1;
+                            if m + 1 < fast_b_win {
+                                fast_b_win = m + 1;
+                            } else if m + 1 > slow_b_win {
+                                slow_b_win = m + 1;
+                            }
+                        }
+                    },
+                    None => (),
+                }
+            }
+
+            // Update parent ending
+            if node.board.is_w_move {
+                if w_wins > 0 {
+                    *ending = Some(Ending::WhiteWin(fast_w_win));
+                } else if draws == length - b_wins {
+                    *ending = Some(Ending::Draw);
+                } else if b_wins == length {
+                    *ending = Some(Ending::BlackWin(slow_b_win));
+                }
+            } else {
+                if b_wins > 0 {
+                    *ending = Some(Ending::BlackWin(fast_b_win));
+                } else if draws == length - w_wins {
+                    *ending = Some(Ending::Draw);
+                } else if w_wins == length {
+                    *ending = Some(Ending::WhiteWin(slow_w_win));
+                }
+            }
+        }
+
+        // Move to the parent
+        match node.parent.upgrade() {
+            Some(n) => node = Arc::clone(&n),
+            None => break,
+        }
+    }
+}
 
 fn stop_searching(
     root: &Arc<Node>,
