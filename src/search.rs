@@ -30,7 +30,7 @@ pub struct Node {
 }
 
 #[derive(Copy, Clone)]
-enum Ending {
+pub enum Ending {
     Draw,
     //Win tracks how many moves from mate we are
     WhiteWin(u32),
@@ -60,13 +60,13 @@ impl Node {
             board.is_w_move = true;
             board.fullmove_clock += 1;
         }
-        let eval = eval::evaluate(&board);
+        let (end, eval) = eval::evaluate(&board);
         Node {
             board: board,
             visits: RwLock::new(1),
             depth: RwLock::new(0),
             eval: RwLock::new(eval),
-            ending: RwLock::new(None),
+            ending: RwLock::new(end),
             children: RwLock::new(Vec::new()),
             parent: Arc::downgrade(leaf),
             last_move: Some(last_move),
@@ -518,7 +518,7 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
     let explore = ((parent_visits as f32).ln()
         / ((visits as f32) + AVG_CHILD_COUNT * (threads as f32)))
         .sqrt();
-    let scale = 4.0_f32.powf((mcts_explore as f32) / 50.0 - 1.0);
+    let scale = 2.0_f32.powf((mcts_explore as f32) / 50.0 - 1.0);
 
     if is_w_move {
         eval + scale * explore
@@ -528,12 +528,9 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
 }
 
 fn decr_proc_threads(node: &Arc<Node>) {
+    let mut new_node = Arc::clone(node);
     loop {
-        let mut new_node = Arc::clone(node);
-        {
-            let mut threads = new_node.proc_threads.write().unwrap();
-            *threads -= 1;
-        }
+        *new_node.proc_threads.write().unwrap() -= 1;
         match new_node.parent.upgrade() {
             Some(a) => new_node = Arc::clone(&a),
             None => break,
@@ -547,15 +544,10 @@ fn propogate_values(leaf: &Arc<Node>) {
     loop {
         {
             let children = node.children.read().unwrap();
-            let mut visits = node.visits.write().unwrap();
-            let mut depth = node.depth.write().unwrap();
-            let mut eval = node.eval.write().unwrap();
-            let mut ending = node.ending.write().unwrap();
-            let mut threads = node.proc_threads.write().unwrap();
 
-            *visits = 0;
-            *threads -= 1;
+            *node.proc_threads.write().unwrap() -= 1;
 
+            let mut new_visits = 1;
             let length = children.len();
             let mut w_wins = 0;
             let mut b_wins = 0;
@@ -567,6 +559,7 @@ fn propogate_values(leaf: &Arc<Node>) {
             for child in children.iter() {
                 // Update parent eval
                 let c_eval = child.eval.read().unwrap();
+                let mut eval = node.eval.write().unwrap();
                 if node.board.is_w_move {
                     if *c_eval > *eval {
                         *eval = *c_eval;
@@ -576,15 +569,20 @@ fn propogate_values(leaf: &Arc<Node>) {
                         *eval = *c_eval;
                     }
                 }
+                drop(eval);
+                drop(c_eval);
 
                 // Update parent visits
-                *visits += *child.visits.read().unwrap();
+                new_visits += *child.visits.read().unwrap();
 
                 // Update parent depth
                 let c_depth = child.depth.read().unwrap();
+                let mut depth = node.depth.write().unwrap();
                 if *c_depth + 1 > *depth {
                     *depth = *c_depth + 1;
                 }
+                drop(depth);
+                drop(c_depth);
 
                 // Sample child endings
                 match *child.ending.read().unwrap() {
@@ -610,23 +608,40 @@ fn propogate_values(leaf: &Arc<Node>) {
                     None => (),
                 }
             }
+            *node.visits.write().unwrap() = new_visits;
 
             // Update parent ending
-            if node.board.is_w_move {
-                if w_wins > 0 {
-                    *ending = Some(Ending::WhiteWin(fast_w_win));
-                } else if draws == length - b_wins {
-                    *ending = Some(Ending::Draw);
-                } else if b_wins == length {
-                    *ending = Some(Ending::BlackWin(slow_b_win));
+            // Checkmate and Stalemate calculation for leaf nodes with no children
+            if length == 0 {
+                if node.board.is_w_move
+                    && move_gen::is_attacked(&node.board, false, node.board.w_k_bb)
+                {
+                    *node.ending.write().unwrap() = Some(Ending::BlackWin(0));
+                } else if !node.board.is_w_move
+                    && move_gen::is_attacked(&node.board, true, node.board.b_k_bb)
+                {
+                    *node.ending.write().unwrap() = Some(Ending::WhiteWin(0));
+                } else {
+                    *node.ending.write().unwrap() = Some(Ending::Draw);
                 }
             } else {
-                if b_wins > 0 {
-                    *ending = Some(Ending::BlackWin(fast_b_win));
-                } else if draws == length - w_wins {
-                    *ending = Some(Ending::Draw);
-                } else if w_wins == length {
-                    *ending = Some(Ending::WhiteWin(slow_w_win));
+                // Not a leaf node with no children, propogate values
+                if node.board.is_w_move {
+                    if w_wins > 0 {
+                        *node.ending.write().unwrap() = Some(Ending::WhiteWin(fast_w_win));
+                    } else if draws == length - b_wins {
+                        *node.ending.write().unwrap() = Some(Ending::Draw);
+                    } else if b_wins == length {
+                        *node.ending.write().unwrap() = Some(Ending::BlackWin(slow_b_win));
+                    }
+                } else {
+                    if b_wins > 0 {
+                        *node.ending.write().unwrap() = Some(Ending::BlackWin(fast_b_win));
+                    } else if draws == length - w_wins {
+                        *node.ending.write().unwrap() = Some(Ending::Draw);
+                    } else if w_wins == length {
+                        *node.ending.write().unwrap() = Some(Ending::WhiteWin(slow_w_win));
+                    }
                 }
             }
         }
@@ -650,7 +665,9 @@ fn stop_searching(
     if root.children.read().unwrap().len() < 2 {
         return true;
     }
-    if u64::try_from(*root.visits.read().unwrap()).unwrap() * BYTES_PER_NODE > u64::try_from(mcts_hash).unwrap() * 1048576 {
+    if u64::try_from(*root.visits.read().unwrap()).unwrap() * BYTES_PER_NODE
+        > u64::try_from(mcts_hash).unwrap() * 1048576
+    {
         return true;
     }
     match *go_parms {

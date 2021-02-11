@@ -1120,7 +1120,7 @@ fn gen_king_moves(leaf: &Arc<Node>, w_pieces: u64, b_pieces: u64) -> Vec<Arc<Nod
     children
 }
 
-fn is_attacked(board: &Board, by_white: bool, bb: u64) -> bool {
+pub fn is_attacked(board: &Board, by_white: bool, bb: u64) -> bool {
     if !by_white {
         // We are white
         let ally_pieces =
