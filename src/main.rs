@@ -89,6 +89,7 @@ fn main() {
             "stop" => uci_stop(&searching),
             "quit" => uci_quit(),
             "fen" => print_fen(&root),
+            "static_eval" => static_eval(input),
             _ => println!("Invalid command: {}", input[0]),
         }
     }
@@ -184,7 +185,7 @@ fn initialize() -> (Vec<UciOption>, Arc<Node>) {
 }
 
 fn uci_uci(options: &Vec<UciOption>) {
-    println!("id name Rust_Chess 0.1.0");
+    println!("id name Ragnarook 0.1.0");
     println!("id author Kyle Forrester");
 
     for option in options.iter() {
@@ -460,6 +461,14 @@ fn tokenize_stdin() -> Vec<String> {
 
 fn print_fen(root: &Arc<Node>) {
     println!("{}", root.board);
+}
+
+fn static_eval(input: Vec<String>) {
+    let fen = &input[1..].join(" ");
+    let board = Board::new(fen);
+    let eval = eval::evaluate(&board);
+
+    println!("{}", eval.1);
 }
 
 #[cfg(test)]

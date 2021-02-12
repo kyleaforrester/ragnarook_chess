@@ -1181,26 +1181,26 @@ pub fn is_attacked(board: &Board, by_white: bool, bb: u64) -> bool {
     false
 }
 
-fn solo_knight_moves(bb: u64, ally_pieces: u64) -> u64 {
+pub fn solo_knight_moves(bb: u64, ally_pieces: u64) -> u64 {
     let pos = bb.trailing_zeros() as usize;
     magic::knight_collisions[pos] & !ally_pieces
 }
 
-fn solo_bishop_moves(bb: u64, ally_pieces: u64, all_pieces: u64) -> u64 {
+pub fn solo_bishop_moves(bb: u64, ally_pieces: u64, all_pieces: u64) -> u64 {
     let pos = bb.trailing_zeros() as usize;
     let occupied_coll = magic::bishop_collisions[pos] & all_pieces;
     let magic_ind = Wrapping(magic::bishop_magic_numbers[pos]) * Wrapping(occupied_coll) >> 55;
     magic::bishop_magic_move_sets[pos][magic_ind.0 as usize] & !ally_pieces
 }
 
-fn solo_rook_moves(bb: u64, ally_pieces: u64, all_pieces: u64) -> u64 {
+pub fn solo_rook_moves(bb: u64, ally_pieces: u64, all_pieces: u64) -> u64 {
     let pos = bb.trailing_zeros() as usize;
     let occupied_coll = magic::rook_collisions[pos] & all_pieces;
     let magic_ind = Wrapping(magic::rook_magic_numbers[pos]) * Wrapping(occupied_coll) >> 52;
     magic::rook_magic_move_sets[pos][magic_ind.0 as usize] & !ally_pieces
 }
 
-fn solo_king_moves(bb: u64, ally_pieces: u64) -> u64 {
+pub fn solo_king_moves(bb: u64, ally_pieces: u64) -> u64 {
     let pos = bb.trailing_zeros() as usize;
     magic::king_collisions[pos] & !ally_pieces
 }

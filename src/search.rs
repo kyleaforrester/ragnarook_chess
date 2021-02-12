@@ -518,7 +518,7 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
     let explore = ((parent_visits as f32).ln()
         / ((visits as f32) + AVG_CHILD_COUNT * (threads as f32)))
         .sqrt();
-    let scale = 2.0_f32.powf((mcts_explore as f32) / 50.0 - 1.0);
+    let scale = 1.0_f32.powf((mcts_explore as f32) / 50.0);
 
     if is_w_move {
         eval + scale * explore
@@ -704,10 +704,10 @@ fn stop_searching(
                 / (m_to_go as f32 * speed);
 
             if need_extension {
-                return (time_allowed * TIME_EXTENSION_MULT_MAX) as u128
-                    > start_time.elapsed().as_millis();
+                return ((time_allowed * TIME_EXTENSION_MULT_MAX) as u128)
+                    < start_time.elapsed().as_millis();
             } else {
-                return time_allowed as u128 > start_time.elapsed().as_millis();
+                return (time_allowed as u128) < start_time.elapsed().as_millis();
             }
         }
         Depth { plies } => {
