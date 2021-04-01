@@ -2,5 +2,8 @@
 *.swp
 Cargo.lock
 __pycache__
+train/*.epd
 train/data/*
 train/nohup.out
+train/pytorch/train_data/*.train
+train/archive_pgns/*.zip
