@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct Board {
     pub w_p_bb: u64,
     pub w_n_bb: u64,
