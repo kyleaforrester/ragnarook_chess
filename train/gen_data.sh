@@ -1,6 +1,6 @@
 
 while true; do
-c-chess-cli -each tc=5+0.2 option.Threads=1 \
+c-chess-cli -each tc=10+0.5 option.Threads=1 \
     -engine cmd=Ethereal name=Ethereal \
     -engine cmd=stockfish_7 name=stockfish_7 \
     -engine cmd=stockfish_8 name=stockfish_8 \
