@@ -8,7 +8,8 @@ import torch
 import multiprocessing as mp
 import gc
 
-prompt = '''Select an option:
+HISTORY_LEN = 4
+PROMPT = '''Select an option:
     1) Load net
     2) Save net
     3) New net
@@ -16,6 +17,7 @@ prompt = '''Select an option:
     5) Evaluate position
     6) Change learning rate
 Command: '''
+
 
 def load_net():
     while True:
@@ -38,7 +40,7 @@ def train_net():
     train_files = [f for f in os.listdir('./train_data') if f[-6:] == '.train']
     random.shuffle(train_files)
     inputs, labels = (None, None)
-    history = []
+    history = None
 
     auto_tune = input('Autotune run (Y/N)? ')
     if auto_tune == 'Y':
@@ -69,29 +71,34 @@ def train_net():
         p.start()
 
         # Spend time training
-        history.append(my_net.train_file(inputs, labels))
-
-        # Remove old history
-        history = history[-20:]
-
-        # Check if we are not making progress over 10 epoch span
-        if sum(history[:10]) < sum(history[-10:]):
-            # Reduce learning rate
-            new_rate = my_net.learning_rate / 2
-            print('Reducing learning rate from {} to {}'.format(my_net.learning_rate, new_rate))
-            my_net.learning_rate = new_rate
-            for g in my_net.optimizer.param_groups:
-                g['lr'] = new_rate
-
+        my_net.train_file(inputs, labels)
 
         # Free memory
         del inputs
         del labels
         gc.collect()
 
+        # Check if we are not making progress by checking validation data
+        if auto_tune == True and (i + 1) % HISTORY_LEN == 0:
+            v_q = mp.Queue()
+            read_file('validation.data', v_q)
+            v_inputs, v_labels = v_q.get()
+            loss = my_net.validation_loss(v_inputs, v_labels)
+            if history is not None and history < loss:
+                # Reduce learning rate
+                new_rate = my_net.learning_rate / 2
+                print('Reducing learning rate from {} to {}'.format(my_net.learning_rate, new_rate))
+                my_net.learning_rate = new_rate
+                for g in my_net.optimizer.param_groups:
+                    g['lr'] = new_rate
+            history = loss
+            del v_inputs
+            del v_labels
+
         # Pick up the next inputs and labels
         inputs, labels = q.get()
         p.join()
+        gc.collect()
 
 
 
@@ -240,7 +247,7 @@ if __name__=='__main__':
 
     while True:
         while True:
-            command = input(prompt)
+            command = input(PROMPT)
             if command in ('1', '2', '3', '4', '5', '6'):
                 break
 

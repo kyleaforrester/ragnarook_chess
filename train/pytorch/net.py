@@ -16,14 +16,13 @@ class Net(nn.Module):
         # 12 input image channels for each piecetype, 32 output channels, 3x3 square convolution
         # Pad after each convolution
         # kernel
-        self.conv1 = nn.Conv2d(12, 128, 3, padding = (1, 1))
-        self.conv2 = nn.Conv2d(128, 128, 3, padding = (1, 1))
-        self.conv3 = nn.Conv2d(128, 128, 3, padding = (1, 1))
-        self.conv4 = nn.Conv2d(128, 128, 3, padding = (1, 1))
+        self.conv1 = nn.Conv2d(12, 32, 3, padding = (1, 1))
+        self.conv2 = nn.Conv2d(32, 32, 3, padding = (1, 1))
+        self.conv3 = nn.Conv2d(32, 32, 3, padding = (1, 1))
 
         # an affine operation: y = Wx + b
-        self.fc1 = nn.Linear(128 * 64, 128)  # 6*6 from image dimension
-        self.fc2 = nn.Linear(128, 1)
+        self.fc1 = nn.Linear(32 * 64, 64)  # 6*6 from image dimension
+        self.fc2 = nn.Linear(64, 1)
 
         self.learning_rate = 0.001
         self.device = torch.device("cuda:0")
@@ -34,7 +33,6 @@ class Net(nn.Module):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
         x = x.view(-1, self.num_flat_features(x))
         x = F.relu(self.fc1(x))
         x = torch.sigmoid(self.fc2(x))
@@ -71,6 +69,31 @@ class Net(nn.Module):
             if True:
                 loss = (running_loss/stripe_count)**(1/2)
                 print('\tRound {} Avg Linear Loss: {}'.format(r, loss))
+                running_loss = 0.0
+        return loss
+
+    def validation_loss(self, inputs, labels):
+        loss = 0.0
+        running_loss = 0.0
+        batch_size = 100
+        stripe_count = int(len(inputs) / batch_size)
+        for r in range(1):
+            for i in range(stripe_count):
+                # i is number of stripes in chunked list of minibatches
+                t_inputs = torch.tensor(inputs[i::stripe_count], device=self.device)
+                t_labels = torch.tensor(labels[i::stripe_count], device=self.device)
+
+                self.optimizer.zero_grad()
+                outputs = self(t_inputs)
+                loss = self.criterion(outputs, t_labels)
+
+                # print statistics
+                running_loss += loss.item()
+
+            # print every round
+            if True:
+                loss = (running_loss/stripe_count)**(1/2)
+                print('Validation Data Avg Linear Loss: {}'.format(loss))
                 running_loss = 0.0
         return loss
 
