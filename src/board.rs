@@ -270,20 +270,9 @@ impl Board {
             None
         };
 
-        // Set the side to move
-        match from_pt {
-            PieceType::WP
-            | PieceType::WN
-            | PieceType::WB
-            | PieceType::WR
-            | PieceType::WQ
-            | PieceType::WK => self.is_w_move = false,
-            _ => self.is_w_move = true,
-        }
-
         //Increment move counters
         self.halfmove_clock += 1;
-        if self.is_w_move {
+        if !self.is_w_move {
             self.fullmove_clock += 1;
         }
 
@@ -417,16 +406,22 @@ impl Board {
             Some(c) => {
                 // A promotion!
                 // Add new piece
-                match c {
-                    'n' => self.b_n_bb |= to_pos,
-                    'b' => self.b_b_bb |= to_pos,
-                    'r' => self.b_r_bb |= to_pos,
-                    'q' => self.b_q_bb |= to_pos,
-                    'N' => self.w_n_bb |= to_pos,
-                    'B' => self.w_b_bb |= to_pos,
-                    'R' => self.w_r_bb |= to_pos,
-                    'Q' => self.w_q_bb |= to_pos,
-                    _ => panic!("Invalid promotion piece: {}", c),
+                if self.is_w_move {
+                    match c {
+                        'n' | 'N' => self.w_n_bb |= to_pos,
+                        'b' | 'B' => self.w_b_bb |= to_pos,
+                        'r' | 'R' => self.w_r_bb |= to_pos,
+                        'q' | 'Q' => self.w_q_bb |= to_pos,
+                        _ => panic!("Invalid promotion piece: {}", c),
+                    }
+                } else {
+                    match c {
+                        'n' | 'N' => self.b_n_bb |= to_pos,
+                        'b' | 'B' => self.b_b_bb |= to_pos,
+                        'r' | 'R' => self.b_r_bb |= to_pos,
+                        'q' | 'Q' => self.b_q_bb |= to_pos,
+                        _ => panic!("Invalid promotion piece: {}", c),
+                    }
                 }
             }
             //Regular move
@@ -488,6 +483,9 @@ impl Board {
             PieceType::BQ => self.b_q_bb &= !(0x1 << from_ind),
             PieceType::BK => self.b_k_bb &= !(0x1 << from_ind),
         }
+
+        // Set the side to move
+        self.is_w_move = !self.is_w_move;
     }
 }
 

@@ -4,14 +4,15 @@ use crate::misc;
 use crate::move_gen;
 use crate::UciGo::{Depth, Infinite, Movetime, Nodes, Time};
 use crate::{UciGo, UciOption, UciValue};
-use std::cmp::{self,Ordering};
+use std::cmp::{self, Ordering, PartialOrd};
 use std::convert::TryFrom;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const SEED_XOR: u64 = 0x77de55f9d2fe1e0d;
 const AVG_CHILD_COUNT: f32 = 50.0;
-const MAX_GAME_LENGTH: u32 = 60;
+const MAX_GAME_LENGTH: u32 = 100;
 const TIME_EXTENSION_MULT_MAX: f32 = 3.0;
 const BYTES_PER_NODE: u64 = 880;
 
@@ -41,144 +42,151 @@ pub enum Ending {
 
 impl PartialOrd for Node {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.board.is_w_move {
-            if !other.board.is_w_move {
-                return None;
-            }
-            match *self.ending.read().unwrap() {
-                Some(le) => {
-                    match *other.ending.read().unwrap() {
-                        Some(re) => {
-                            match le {
-                                Ending::Draw => {
-                                    match re {
-                                        Ending::Draw => Some(Ordering::Equal),
-                                        Ending::WhiteWin(rm) => Some(Ordering::Less),
-                                        Ending::BlackWin(rm) => Some(Ordering::Greater),
-                                    }
-                                },
-                                Ending::WhiteWin(lm) => {
-                                    match re {
-                                        Ending::Draw => Some(Ordering::Greater),
-                                        Ending::WhiteWin(rm) => Some(rm.cmp(&lm)),
-                                        Ending::BlackWin(rm) => Some(Ordering::Greater),
-                                    }
-                                },
-                                Ending::BlackWin(lm) => {
-                                    match re {
-                                        Ending::Draw => Some(Ordering::Less),
-                                        Ending::WhiteWin(rm) => Some(Ordering::Less),
-                                        Ending::BlackWin(rm) => Some(lm.cmp(&rm)),
-                                    }
-                                },
-                            }
-                        },
-                        None => {
-                            match le {
-                                Ending::Draw => {
-                                    if *other.eval.read().unwrap() < 0.5 {
-                                        Some(Ordering::Greater)
-                                    } else if *other.eval.read().unwrap() > 0.5 {
-                                        Some(Ordering::Less)
-                                    } else {
-                                        Some(Ordering::Equal)
-                                    }
-                                },
-                                Ending::WhiteWin(lm) => Some(Ordering::Greater),
-                                Ending::BlackWin(lm) => Some(Ordering::Less),
-                            }
-                        },
-                    }
-                },
-                None => {
-                    match *other.ending.read().unwrap() {
-                        Some(re) => {
-                            match re {
-                                Ending::Draw => {
-                                    if *self.eval.read().unwrap() > 0.5 {
-                                        Some(Ordering::Greater)
-                                    } else if *self.eval.read().unwrap() < 0.5 {
-                                        Some(Ordering::Less)
-                                    } else {
-                                        Some(Ordering::Equal)
-                                    }
-                                },
-                                Ending::WhiteWin(rm) => Some(Ordering::Less),
-                                Ending::BlackWin(rm) => Some(Ordering::Greater),
-                            }
-                        },
-                        None => Some(other.visits.read().unwrap().cmp(&*self.visits.read().unwrap())),
-                    }
-                }
-            }
-        } else {
-            // Black to move
+        if !self.board.is_w_move {
+            // Root board is white to move.  This child board is black to move.
+            // Evaluated for white's perspective.
             if other.board.is_w_move {
                 return None;
             }
             match *self.ending.read().unwrap() {
-                Some(le) => {
-                    match *other.ending.read().unwrap() {
-                        Some(re) => {
-                            match le {
-                                Ending::Draw => {
-                                    match re {
-                                        Ending::Draw => Some(Ordering::Equal),
-                                        Ending::WhiteWin(rm) => Some(Ordering::Greater),
-                                        Ending::BlackWin(rm) => Some(Ordering::Less),
-                                    }
-                                },
-                                Ending::WhiteWin(lm) => {
-                                    match re {
-                                        Ending::Draw => Some(Ordering::Less),
-                                        Ending::WhiteWin(rm) => Some(lm.cmp(&rm)),
-                                        Ending::BlackWin(rm) => Some(Ordering::Less),
-                                    }
-                                },
-                                Ending::BlackWin(lm) => {
-                                    match re {
-                                        Ending::Draw => Some(Ordering::Greater),
-                                        Ending::WhiteWin(rm) => Some(Ordering::Greater),
-                                        Ending::BlackWin(rm) => Some(rm.cmp(&lm)),
-                                    }
-                                },
-                            }
+                Some(le) => match *other.ending.read().unwrap() {
+                    Some(re) => match le {
+                        Ending::Draw => match re {
+                            Ending::Draw => Some(Ordering::Equal),
+                            Ending::WhiteWin(rm) => Some(Ordering::Less),
+                            Ending::BlackWin(rm) => Some(Ordering::Greater),
                         },
-                        None => {
-                            match le {
-                                Ending::Draw => {
-                                    if *other.eval.read().unwrap() > 0.5 {
-                                        Some(Ordering::Greater)
-                                    } else if *other.eval.read().unwrap() < 0.5 {
-                                        Some(Ordering::Less)
-                                    } else {
-                                        Some(Ordering::Equal)
-                                    }
-                                },
-                                Ending::WhiteWin(lm) => Some(Ordering::Less),
-                                Ending::BlackWin(lm) => Some(Ordering::Greater),
-                            }
+                        Ending::WhiteWin(lm) => match re {
+                            Ending::Draw => Some(Ordering::Greater),
+                            Ending::WhiteWin(rm) => Some(rm.cmp(&lm)),
+                            Ending::BlackWin(rm) => Some(Ordering::Greater),
                         },
-                    }
+                        Ending::BlackWin(lm) => match re {
+                            Ending::Draw => Some(Ordering::Less),
+                            Ending::WhiteWin(rm) => Some(Ordering::Less),
+                            Ending::BlackWin(rm) => Some(lm.cmp(&rm)),
+                        },
+                    },
+                    None => match le {
+                        Ending::Draw => {
+                            if *other.eval.read().unwrap() < 0.5 {
+                                Some(Ordering::Greater)
+                            } else if *other.eval.read().unwrap() > 0.5 {
+                                Some(Ordering::Less)
+                            } else {
+                                Some(Ordering::Equal)
+                            }
+                        }
+                        Ending::WhiteWin(lm) => Some(Ordering::Greater),
+                        Ending::BlackWin(lm) => Some(Ordering::Less),
+                    },
                 },
                 None => {
                     match *other.ending.read().unwrap() {
-                        Some(re) => {
-                            match re {
-                                Ending::Draw => {
-                                    if *self.eval.read().unwrap() < 0.5 {
-                                        Some(Ordering::Greater)
-                                    } else if *self.eval.read().unwrap() > 0.5 {
-                                        Some(Ordering::Less)
-                                    } else {
-                                        Some(Ordering::Equal)
-                                    }
-                                },
-                                Ending::WhiteWin(rm) => Some(Ordering::Greater),
-                                Ending::BlackWin(rm) => Some(Ordering::Less),
+                        Some(re) => match re {
+                            Ending::Draw => {
+                                if *self.eval.read().unwrap() > 0.5 {
+                                    Some(Ordering::Greater)
+                                } else if *self.eval.read().unwrap() < 0.5 {
+                                    Some(Ordering::Less)
+                                } else {
+                                    Some(Ordering::Equal)
+                                }
                             }
+                            Ending::WhiteWin(rm) => Some(Ordering::Less),
+                            Ending::BlackWin(rm) => Some(Ordering::Greater),
                         },
-                        None => Some(other.visits.read().unwrap().cmp(&*self.visits.read().unwrap())),
+                        None => {
+                            match self
+                                .visits
+                                .read()
+                                .unwrap()
+                                .partial_cmp(&other.visits.read().unwrap())
+                                .unwrap()
+                            {
+                                Ordering::Less => Some(Ordering::Less),
+                                Ordering::Greater => Some(Ordering::Greater),
+                                Ordering::Equal => self
+                                    .eval
+                                    .read()
+                                    .unwrap()
+                                    .partial_cmp(&other.eval.read().unwrap()),
+                            }
+                        } //None => self.eval.read().unwrap().partial_cmp(&other.eval.read().unwrap()),
+                    }
+                }
+            }
+        } else {
+            // Root board is black to move.  This child board is white to move.
+            // Evaluated for black's perspective.
+            if !other.board.is_w_move {
+                return None;
+            }
+            match *self.ending.read().unwrap() {
+                Some(le) => match *other.ending.read().unwrap() {
+                    Some(re) => match le {
+                        Ending::Draw => match re {
+                            Ending::Draw => Some(Ordering::Equal),
+                            Ending::WhiteWin(rm) => Some(Ordering::Greater),
+                            Ending::BlackWin(rm) => Some(Ordering::Less),
+                        },
+                        Ending::WhiteWin(lm) => match re {
+                            Ending::Draw => Some(Ordering::Less),
+                            Ending::WhiteWin(rm) => Some(lm.cmp(&rm)),
+                            Ending::BlackWin(rm) => Some(Ordering::Less),
+                        },
+                        Ending::BlackWin(lm) => match re {
+                            Ending::Draw => Some(Ordering::Greater),
+                            Ending::WhiteWin(rm) => Some(Ordering::Greater),
+                            Ending::BlackWin(rm) => Some(rm.cmp(&lm)),
+                        },
+                    },
+                    None => match le {
+                        Ending::Draw => {
+                            if *other.eval.read().unwrap() > 0.5 {
+                                Some(Ordering::Greater)
+                            } else if *other.eval.read().unwrap() < 0.5 {
+                                Some(Ordering::Less)
+                            } else {
+                                Some(Ordering::Equal)
+                            }
+                        }
+                        Ending::WhiteWin(lm) => Some(Ordering::Less),
+                        Ending::BlackWin(lm) => Some(Ordering::Greater),
+                    },
+                },
+                None => {
+                    match *other.ending.read().unwrap() {
+                        Some(re) => match re {
+                            Ending::Draw => {
+                                if *self.eval.read().unwrap() < 0.5 {
+                                    Some(Ordering::Greater)
+                                } else if *self.eval.read().unwrap() > 0.5 {
+                                    Some(Ordering::Less)
+                                } else {
+                                    Some(Ordering::Equal)
+                                }
+                            }
+                            Ending::WhiteWin(rm) => Some(Ordering::Greater),
+                            Ending::BlackWin(rm) => Some(Ordering::Less),
+                        },
+                        None => {
+                            match self
+                                .visits
+                                .read()
+                                .unwrap()
+                                .partial_cmp(&other.visits.read().unwrap())
+                                .unwrap()
+                            {
+                                Ordering::Less => Some(Ordering::Less),
+                                Ordering::Greater => Some(Ordering::Greater),
+                                Ordering::Equal => other
+                                    .eval
+                                    .read()
+                                    .unwrap()
+                                    .partial_cmp(&self.eval.read().unwrap()),
+                            }
+                        } //None => other.eval.read().unwrap().partial_cmp(&self.eval.read().unwrap()),
                     }
                 }
             }
@@ -189,17 +197,14 @@ impl PartialOrd for Node {
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
         match self.partial_cmp(other) {
-            Some(o) => {
-                match o {
-                    Ordering::Equal => true,
-                    _ => false,
-                }
+            Some(o) => match o {
+                Ordering::Equal => true,
+                _ => false,
             },
             None => false,
         }
     }
 }
-
 
 impl Node {
     pub fn new(pos: board::Board) -> Node {
@@ -397,7 +402,7 @@ pub fn search(
 
 fn print_info(root: &Arc<Node>, multi_pv: i32, start_time: &Instant, rng_state: &mut u64) {
     let mut children = root.children.write().unwrap();
-    children.sort_unstable_by(|a, b| a.partial_cmp(&b).unwrap());
+    children.sort_unstable_by(|a, b| b.partial_cmp(&a).unwrap());
     drop(children);
 
     let time = start_time.elapsed();
@@ -409,39 +414,15 @@ fn print_info(root: &Arc<Node>, multi_pv: i32, start_time: &Instant, rng_state: 
         let child = Arc::clone(&children[i]);
         let pv = get_pv(&child);
         let eval = match *child.ending.read().unwrap() {
-            Some(e) => {
-                match e {
-                    Ending::Draw => "cp 0".to_string(),
-                    Ending::WhiteWin(m) => format!("mate {}", m),
-                    Ending::BlackWin(m) => format!("mate -{}", m),
-                }
+            Some(e) => match e {
+                Ending::Draw => "cp 0".to_string(),
+                Ending::WhiteWin(m) => format!("mate {}", m),
+                Ending::BlackWin(m) => format!("mate -{}", m),
             },
             None => format!("cp {}", misc::eval_to_cp(*child.eval.read().unwrap())),
         };
         let depth = *child.depth.read().unwrap();
         println!("info multipv {} depth {} seldepth {} time {} nodes {} pv_nodes {} nps {} score {} tbhits 0 pv {}", i + 1, depth, depth, time.as_millis(), nodes, child.visits.read().unwrap(), nps, eval, pv.trim());
-    }
-}
-
-fn print_info_orig(root: &Arc<Node>, multi_pv: i32, start_time: &Instant, rng_state: &mut u64) {
-    let mut children_sorted: Vec<(usize, u32)> = Vec::new();
-    let children = root.children.read().unwrap();
-    for child in children.iter().enumerate() {
-        let node = Arc::clone(child.1);
-        children_sorted.push((child.0, *node.visits.read().unwrap()));
-    }
-
-    children_sorted.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-
-    let depth = *root.depth.read().unwrap();
-    let nodes = *root.visits.read().unwrap();
-    let time = start_time.elapsed();
-    let nps = (nodes as f32) / time.as_secs_f32();
-
-    for i in 0..cmp::min(multi_pv as usize, children_sorted.len()) {
-        let child = Arc::clone(&children[children_sorted[i].0]);
-        let pv = get_pv(&child);
-        println!("info multipv {} depth {} seldepth {} time {} nodes {} pv_nodes {} nps {} score cp {} tbhits 0 pv {}", i + 1, depth, depth, time.as_millis(), nodes, child.visits.read().unwrap(), nps, misc::eval_to_cp(*child.eval.read().unwrap()), pv.trim());
     }
 }
 
@@ -456,7 +437,7 @@ fn get_pv(node: &Arc<Node>) -> String {
                 pv.push_str(" ");
                 pv.push_str(n.last_move.as_ref().unwrap());
                 next_node = n;
-            },
+            }
             None => break,
         }
     }
@@ -466,7 +447,7 @@ fn get_pv(node: &Arc<Node>) -> String {
 
 fn get_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) -> Option<Arc<Node>> {
     let mut children = root.children.write().unwrap();
-    children.sort_unstable_by(|a, b| a.partial_cmp(&b).unwrap());
+    children.sort_unstable_by(|a, b| b.partial_cmp(&a).unwrap());
     if children.len() > 0 {
         Some(Arc::clone(&children[0]))
     } else {
@@ -621,6 +602,7 @@ fn find_and_bloom_leaf_node(root: &Arc<Node>, mcts_explore: i32) -> Result<Arc<N
                     .filter(|x| x.ending.read().unwrap().is_none())
                     .collect();
                 if valid_children.len() == 0 {
+                    decr_proc_threads(&node);
                     continue 'outer;
                 }
 
@@ -671,7 +653,7 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
     let explore = ((parent_visits as f32).ln()
         / ((visits as f32) + AVG_CHILD_COUNT * (threads as f32)))
         .sqrt();
-    let scale = 2.0_f32.powf((mcts_explore as f32) / 50.0);
+    let scale = 1.02_f32.powf((mcts_explore as f32) - 100.0);
 
     if is_w_move {
         eval + scale * explore
@@ -709,17 +691,24 @@ fn propogate_values(leaf: &Arc<Node>) {
             let mut slow_w_win = 0;
             let mut fast_b_win = u32::MAX;
             let mut slow_b_win = 0;
+            let mut new_eval = if length > 0 {
+                children[0].eval.read().unwrap().deref().clone()
+            } else {
+                0.5
+            };
             for child in children.iter() {
-                // Update parent eval
+                // Update new eval
                 let c_eval = child.eval.read().unwrap();
-                let mut eval = node.eval.write().unwrap();
+                let eval = node.eval.read().unwrap();
                 if node.board.is_w_move {
-                    if *c_eval > *eval {
-                        *eval = *c_eval;
+                    if *c_eval > new_eval {
+                        new_eval = *c_eval;
+                        //println!("Replacing eval {} with {} for {} from {}", *eval, new_eval, node.board.to_string(), child.board.to_string());
                     }
                 } else {
-                    if *c_eval < *eval {
-                        *eval = *c_eval;
+                    if *c_eval < new_eval {
+                        new_eval = *c_eval;
+                        //println!("Replacing eval {} with {} for {} from {}", *eval, new_eval, node.board.to_string(), child.board.to_string());
                     }
                 }
                 drop(eval);
@@ -762,6 +751,7 @@ fn propogate_values(leaf: &Arc<Node>) {
                 }
             }
             *node.visits.write().unwrap() = new_visits;
+            *node.eval.write().unwrap() = new_eval;
 
             // Update parent ending
             // Checkmate and Stalemate calculation for leaf nodes with no children
@@ -782,7 +772,7 @@ fn propogate_values(leaf: &Arc<Node>) {
                 if node.board.is_w_move {
                     if w_wins > 0 {
                         *node.ending.write().unwrap() = Some(Ending::WhiteWin(fast_w_win));
-                    } else if draws == length - b_wins {
+                    } else if draws > 0 && draws == length - b_wins {
                         *node.ending.write().unwrap() = Some(Ending::Draw);
                     } else if b_wins == length {
                         *node.ending.write().unwrap() = Some(Ending::BlackWin(slow_b_win));
@@ -790,7 +780,7 @@ fn propogate_values(leaf: &Arc<Node>) {
                 } else {
                     if b_wins > 0 {
                         *node.ending.write().unwrap() = Some(Ending::BlackWin(fast_b_win));
-                    } else if draws == length - w_wins {
+                    } else if draws > 0 && draws == length - w_wins {
                         *node.ending.write().unwrap() = Some(Ending::Draw);
                     } else if w_wins == length {
                         *node.ending.write().unwrap() = Some(Ending::WhiteWin(slow_w_win));
@@ -818,7 +808,13 @@ fn stop_searching(
     if root.children.read().unwrap().len() < 2 {
         return true;
     }
-    if root.children.read().unwrap().iter().all(|x| x.ending.read().unwrap().is_some()) {
+    if root
+        .children
+        .read()
+        .unwrap()
+        .iter()
+        .all(|x| x.ending.read().unwrap().is_some())
+    {
         return true;
     }
     if u64::try_from(*root.visits.read().unwrap()).unwrap() * BYTES_PER_NODE
@@ -854,16 +850,19 @@ fn stop_searching(
 
             let need_extension = needs_extension(root);
             let speed = 4.0_f32.powf((move_speed as f32) / 50.0 - 1.0);
-            let _nodes = root.visits.read().unwrap();
-            let time_allowed = (m_to_go * time_inc + time_left.unwrap()
-                - u32::try_from(move_overhead).unwrap()) as f32
-                / (m_to_go as f32 * speed);
+            let time_allowed = (time_left.unwrap() - u32::try_from(move_overhead).unwrap()) as f32;
+            let time_ration = time_allowed / (m_to_go as f32 * speed);
 
             if need_extension {
-                return ((time_allowed * TIME_EXTENSION_MULT_MAX) as u128)
-                    < start_time.elapsed().as_millis();
+                return cmp::min(
+                    ((time_ration * TIME_EXTENSION_MULT_MAX) as u32 + time_inc) as u128,
+                    time_allowed as u128,
+                ) < start_time.elapsed().as_millis();
             } else {
-                return (time_allowed as u128) < start_time.elapsed().as_millis();
+                return cmp::min(
+                    (time_ration as u32 + time_inc) as u128,
+                    time_allowed as u128,
+                ) < start_time.elapsed().as_millis();
             }
         }
         Depth { plies } => {
@@ -883,7 +882,7 @@ fn stop_searching(
 
 fn needs_extension(root: &Arc<Node>) -> bool {
     let mut children = root.children.write().unwrap();
-    children.sort_unstable_by(|a, b| a.partial_cmp(&b).unwrap());
+    children.sort_unstable_by(|a, b| b.partial_cmp(&a).unwrap());
     drop(children);
     let children = root.children.read().unwrap();
 
@@ -892,11 +891,9 @@ fn needs_extension(root: &Arc<Node>) -> bool {
     }
 
     match *children[0].ending.read().unwrap() {
-        Some(e) => {
-            match e {
-                Ending::Draw => return true,
-                _ => return false,
-            }
+        Some(e) => match e {
+            Ending::Draw => return true,
+            _ => return false,
         },
         None => (),
     }

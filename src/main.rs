@@ -584,6 +584,18 @@ mod tests {
         assert_eq!(resolve_fen("position fen rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP1pP/R2QKBNR b KQkq - 1 5 moves g2h1r"), "rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP2P/R2QKBNr w Qkq - 0 6");
         // B_Q
         assert_eq!(resolve_fen("position fen rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP1pP/R2QKBNR b KQkq - 1 5 moves g2h1q"), "rnbqkbnr/pppp1ppp/8/8/8/2NP4/PPPBP2P/R2QKBNq w Qkq - 0 6");
+
+        // No Capture lower case promotions
+        // White
+        assert_eq!(
+            resolve_fen("position fen 6R1/P4p2/6p1/NK2k2p/7P/8/8/r7 w - - 13 86 moves a7a8q"),
+            "Q5R1/5p2/6p1/NK2k2p/7P/8/8/r7 b - - 0 86"
+        );
+        //Black
+        assert_eq!(
+            resolve_fen("position fen 7R/p7/8/8/1P1K2p1/3P4/P5kp/5r2 b - - 4 52 moves h2h1q"),
+            "7R/p7/8/8/1P1K2p1/3P4/P5k1/5r1q w - - 0 53"
+        );
     }
 
     #[test]

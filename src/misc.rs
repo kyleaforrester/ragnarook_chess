@@ -23,7 +23,10 @@ pub fn cp_to_eval(cp: i32) -> f32 {
     }
 }
 
-pub fn eval_to_movestogo(_eval: f32) -> u32 {
+pub fn eval_to_movestogo(eval: f32) -> u32 {
+    // Need inverse of y = (1.015)**(-x - 46.56) + 0.5
+    let flip_eval = if eval < 0.5 { 1.0 - eval } else { eval };
+
     50
 }
 
