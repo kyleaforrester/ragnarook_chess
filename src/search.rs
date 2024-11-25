@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const SEED_XOR: u64 = 0x77de55f9d2fe1e0d;
 const AVG_CHILD_COUNT: f32 = 50.0;
-const MAX_GAME_LENGTH: u32 = 100;
+const MAX_GAME_LENGTH: u32 = 60;
 const TIME_EXTENSION_MULT_MAX: f32 = 3.0;
 const BYTES_PER_NODE: u64 = 880;
 
@@ -81,40 +81,36 @@ impl PartialOrd for Node {
                         Ending::BlackWin(lm) => Some(Ordering::Less),
                     },
                 },
-                None => {
-                    match *other.ending.read().unwrap() {
-                        Some(re) => match re {
-                            Ending::Draw => {
-                                if *self.eval.read().unwrap() > 0.5 {
-                                    Some(Ordering::Greater)
-                                } else if *self.eval.read().unwrap() < 0.5 {
-                                    Some(Ordering::Less)
-                                } else {
-                                    Some(Ordering::Equal)
-                                }
+                None => match *other.ending.read().unwrap() {
+                    Some(re) => match re {
+                        Ending::Draw => {
+                            if *self.eval.read().unwrap() > 0.5 {
+                                Some(Ordering::Greater)
+                            } else if *self.eval.read().unwrap() < 0.5 {
+                                Some(Ordering::Less)
+                            } else {
+                                Some(Ordering::Equal)
                             }
-                            Ending::WhiteWin(rm) => Some(Ordering::Less),
-                            Ending::BlackWin(rm) => Some(Ordering::Greater),
-                        },
-                        None => {
-                            match self
-                                .visits
-                                .read()
-                                .unwrap()
-                                .partial_cmp(&other.visits.read().unwrap())
-                                .unwrap()
-                            {
-                                Ordering::Less => Some(Ordering::Less),
-                                Ordering::Greater => Some(Ordering::Greater),
-                                Ordering::Equal => self
-                                    .eval
-                                    .read()
-                                    .unwrap()
-                                    .partial_cmp(&other.eval.read().unwrap()),
-                            }
-                        } //None => self.eval.read().unwrap().partial_cmp(&other.eval.read().unwrap()),
-                    }
-                }
+                        }
+                        Ending::WhiteWin(rm) => Some(Ordering::Less),
+                        Ending::BlackWin(rm) => Some(Ordering::Greater),
+                    },
+                    None => match self
+                        .visits
+                        .read()
+                        .unwrap()
+                        .partial_cmp(&other.visits.read().unwrap())
+                        .unwrap()
+                    {
+                        Ordering::Less => Some(Ordering::Less),
+                        Ordering::Greater => Some(Ordering::Greater),
+                        Ordering::Equal => self
+                            .eval
+                            .read()
+                            .unwrap()
+                            .partial_cmp(&other.eval.read().unwrap()),
+                    },
+                },
             }
         } else {
             // Root board is black to move.  This child board is white to move.
@@ -155,40 +151,36 @@ impl PartialOrd for Node {
                         Ending::BlackWin(lm) => Some(Ordering::Greater),
                     },
                 },
-                None => {
-                    match *other.ending.read().unwrap() {
-                        Some(re) => match re {
-                            Ending::Draw => {
-                                if *self.eval.read().unwrap() < 0.5 {
-                                    Some(Ordering::Greater)
-                                } else if *self.eval.read().unwrap() > 0.5 {
-                                    Some(Ordering::Less)
-                                } else {
-                                    Some(Ordering::Equal)
-                                }
+                None => match *other.ending.read().unwrap() {
+                    Some(re) => match re {
+                        Ending::Draw => {
+                            if *self.eval.read().unwrap() < 0.5 {
+                                Some(Ordering::Greater)
+                            } else if *self.eval.read().unwrap() > 0.5 {
+                                Some(Ordering::Less)
+                            } else {
+                                Some(Ordering::Equal)
                             }
-                            Ending::WhiteWin(rm) => Some(Ordering::Greater),
-                            Ending::BlackWin(rm) => Some(Ordering::Less),
-                        },
-                        None => {
-                            match self
-                                .visits
-                                .read()
-                                .unwrap()
-                                .partial_cmp(&other.visits.read().unwrap())
-                                .unwrap()
-                            {
-                                Ordering::Less => Some(Ordering::Less),
-                                Ordering::Greater => Some(Ordering::Greater),
-                                Ordering::Equal => other
-                                    .eval
-                                    .read()
-                                    .unwrap()
-                                    .partial_cmp(&self.eval.read().unwrap()),
-                            }
-                        } //None => other.eval.read().unwrap().partial_cmp(&self.eval.read().unwrap()),
-                    }
-                }
+                        }
+                        Ending::WhiteWin(rm) => Some(Ordering::Greater),
+                        Ending::BlackWin(rm) => Some(Ordering::Less),
+                    },
+                    None => match self
+                        .visits
+                        .read()
+                        .unwrap()
+                        .partial_cmp(&other.visits.read().unwrap())
+                        .unwrap()
+                    {
+                        Ordering::Less => Some(Ordering::Less),
+                        Ordering::Greater => Some(Ordering::Greater),
+                        Ordering::Equal => other
+                            .eval
+                            .read()
+                            .unwrap()
+                            .partial_cmp(&self.eval.read().unwrap()),
+                    },
+                },
             }
         }
     }
@@ -219,6 +211,46 @@ impl Node {
             last_move: None,
             proc_threads: RwLock::new(0),
         }
+    }
+
+    pub fn sortable_copy(&self) -> Node {
+        Node {
+            board: self.board.clone(),
+            visits: RwLock::new(*self.visits.read().unwrap()),
+            depth: RwLock::new(*self.depth.read().unwrap()),
+            eval: RwLock::new(*self.eval.read().unwrap()),
+            ending: RwLock::new(self.ending.read().unwrap().clone()),
+            children: RwLock::new(vec![]),
+            parent: Weak::new(),
+            last_move: None,
+            proc_threads: RwLock::new(0),
+        }
+    }
+
+    fn sort_children(&self) {
+        // This method is required to sort the children nodes to prevent multithreads from propogating
+        // changes into the child nodes that would cause flip-flopping during the main thread's sorting
+        // operation, which panics.  This method ensures the sorting is done outside of mutable Nodes
+        let mut children_snapshot: Vec<_> = {
+            let children = self.children.read().unwrap();
+            children
+                .iter()
+                .map(|child| {
+                    (Arc::clone(child), child.sortable_copy()) // Snapshot fields
+                })
+                .collect()
+        };
+
+        // Step 2: Sort the snapshot
+        children_snapshot.sort_unstable_by(|(_, sortable_a), (_, sortable_b)| {
+            sortable_b.partial_cmp(&sortable_a).unwrap()
+        });
+
+        // Step 3: Reorder the original `children` based on the sorted snapshot
+        *self.children.write().unwrap() = children_snapshot
+            .into_iter()
+            .map(|(child, _)| child)
+            .collect();
     }
 
     pub fn spawn(leaf: &Arc<Node>, mut board: board::Board, last_move: String) -> Node {
@@ -401,9 +433,7 @@ pub fn search(
 }
 
 fn print_info(root: &Arc<Node>, multi_pv: i32, start_time: &Instant, rng_state: &mut u64) {
-    let mut children = root.children.write().unwrap();
-    children.sort_unstable_by(|a, b| b.partial_cmp(&a).unwrap());
-    drop(children);
+    root.sort_children();
 
     let time = start_time.elapsed();
     let nodes = *root.visits.read().unwrap();
@@ -446,8 +476,8 @@ fn get_pv(node: &Arc<Node>) -> String {
 }
 
 fn get_bestmove(root: &Arc<Node>, skill: i32, rng_state: &mut u64) -> Option<Arc<Node>> {
-    let mut children = root.children.write().unwrap();
-    children.sort_unstable_by(|a, b| b.partial_cmp(&a).unwrap());
+    root.sort_children();
+    let children = root.children.read().unwrap();
     if children.len() > 0 {
         Some(Arc::clone(&children[0]))
     } else {
@@ -653,7 +683,9 @@ fn mcts_score(node: &Arc<Node>, mcts_explore: i32, parent_visits: u32, is_w_move
     let explore = ((parent_visits as f32).ln()
         / ((visits as f32) + AVG_CHILD_COUNT * (threads as f32)))
         .sqrt();
-    let scale = 1.02_f32.powf((mcts_explore as f32) - 100.0);
+    // Every mcts_explore increase of 10 will double the effect.
+    // Mcts_Explore scaling is centered at 50
+    let scale = 1.0718_f32.powf((mcts_explore as f32) - 50.0);
 
     if is_w_move {
         eval + scale * explore
@@ -881,9 +913,7 @@ fn stop_searching(
 }
 
 fn needs_extension(root: &Arc<Node>) -> bool {
-    let mut children = root.children.write().unwrap();
-    children.sort_unstable_by(|a, b| b.partial_cmp(&a).unwrap());
-    drop(children);
+    root.sort_children();
     let children = root.children.read().unwrap();
 
     if children.len() <= 1 {
