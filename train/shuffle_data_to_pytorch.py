@@ -6,7 +6,7 @@ import subprocess as sp
 from datetime import date
 
 MAX_LINES = 50000000
-FILE_SIZE = 500000
+FILE_SIZE = 10000
 HEX_CHARS = '0123456789abcdef'
 
 def split_to_pytorch(lines):

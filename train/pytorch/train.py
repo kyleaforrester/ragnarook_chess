@@ -8,7 +8,7 @@ import torch
 import multiprocessing as mp
 import gc
 
-HISTORY_LEN = 4
+HISTORY_LEN = 100
 PROMPT = '''Select an option:
     1) Load net
     2) Save net
@@ -16,6 +16,7 @@ PROMPT = '''Select an option:
     4) Train net
     5) Evaluate position
     6) Change learning rate
+    7) Performance on validation data
 Command: '''
 
 
@@ -39,7 +40,7 @@ def save_net(my_net):
 def train_net():
     train_files = [f for f in os.listdir('./train_data') if f[-6:] == '.train']
     random.shuffle(train_files)
-    inputs, labels = (None, None)
+    inputs, wdl_labels, moves_labels = (None, None, None)
     history = None
 
     auto_tune = input('Autotune run (Y/N)? ')
@@ -62,7 +63,7 @@ def train_net():
             q = mp.Queue()
             p = mp.Process(target=read_file, args=(file_name, q))
             p.start()
-            inputs, labels = q.get()
+            inputs, wdl_labels, moves_labels = q.get()
             p.join()
 
         # Begin parsing the next file
@@ -71,19 +72,20 @@ def train_net():
         p.start()
 
         # Spend time training
-        my_net.train_file(inputs, labels)
+        my_net.train_file(inputs, wdl_labels, moves_labels)
 
         # Free memory
         del inputs
-        del labels
+        del wdl_labels
+        del moves_labels
         gc.collect()
 
         # Check if we are not making progress by checking validation data
-        if auto_tune == True and (i + 1) % HISTORY_LEN == 0:
+        if auto_tune == True and i % HISTORY_LEN == 0:
             v_q = mp.Queue()
             read_file('validation.data', v_q)
-            v_inputs, v_labels = v_q.get()
-            loss = my_net.validation_loss(v_inputs, v_labels)
+            v_inputs, v_wdl_labels, v_moves_labels = v_q.get()
+            loss = my_net.validation_loss(v_inputs, v_wdl_labels, v_moves_labels)
             if history is not None and history < loss:
                 # Reduce learning rate
                 new_rate = my_net.learning_rate / 2
@@ -93,13 +95,24 @@ def train_net():
                     g['lr'] = new_rate
             history = loss
             del v_inputs
-            del v_labels
+            del v_wdl_labels
+            del v_moves_labels
 
         # Pick up the next inputs and labels
-        inputs, labels = q.get()
+        inputs, wdl_labels, moves_labels = q.get()
         p.join()
         gc.collect()
 
+def validation_perf(my_net):
+    q = mp.Queue()
+    read_file('validation.data', q)
+    inputs, wdl_labels, moves_labels = q.get()
+
+    loss = my_net.validation_loss(inputs, wdl_labels, moves_labels)
+
+    del inputs
+    del wdl_labels
+    del moves_labels
 
 
 def eval_pos(my_net):
@@ -123,8 +136,9 @@ def read_file(file_name, q):
     random.shuffle(samples)
     samples = [l.strip().split(',') for l in samples]
     inputs = [board_to_tensor(l[0]) for l in samples]
-    labels = [[float(l[2])] for l in samples]
-    q.put((inputs, labels))
+    wdl_labels = [int(l[1]) for l in samples]
+    moves_labels = [[float(l[2])] for l in samples]
+    q.put((inputs, wdl_labels, moves_labels))
 
 
 def board_to_tensor(fen):
@@ -151,24 +165,27 @@ def board_to_tensor(fen):
     castling = elems[2]
     en_passent = elems[3] != '-'
 
-    my_pawns = [[0.0]*8]*8
-    my_knights = [[0.0]*8]*8
-    my_bishops = [[0.0]*8]*8
-    my_rooks = [[0.0]*8]*8
-    my_queens = [[0.0]*8]*8
-    my_king = [[0.0]*8]*8
-    enemy_pawns = [[0.0]*8]*8
-    enemy_knights = [[0.0]*8]*8
-    enemy_bishops = [[0.0]*8]*8
-    enemy_rooks = [[0.0]*8]*8
-    enemy_queens = [[0.0]*8]*8
-    enemy_king = [[0.0]*8]*8
+    my_pawns = [[0.0]*8 for _ in range(8)]
+    my_knights = [[0.0]*8 for _ in range(8)]
+    my_bishops = [[0.0]*8 for _ in range(8)]
+    my_rooks = [[0.0]*8 for _ in range(8)]
+    my_queens = [[0.0]*8 for _ in range(8)]
+    my_king = [[0.0]*8 for _ in range(8)]
+    enemy_pawns = [[0.0]*8 for _ in range(8)]
+    enemy_knights = [[0.0]*8 for _ in range(8)]
+    enemy_bishops = [[0.0]*8 for _ in range(8)]
+    enemy_rooks = [[0.0]*8 for _ in range(8)]
+    enemy_queens = [[0.0]*8 for _ in range(8)]
+    enemy_king = [[0.0]*8 for _ in range(8)]
 
     # Rotate the board if it is black's move
-    if not is_w_move:
-        position = position[::-1]
+    # Flip the board so both white and black will short castle to the right of the screen. Training data is indistinguishable who is white or black, they will look the same.
+    if is_w_move:
+        position = position.split('/')
+    else:
+        position = position.split('/')[::-1]
 
-    for row in enumerate(position.split('/')):
+    for row in enumerate(position):
         col = 0
         for char in row[1]:
             if char == 'p':
@@ -237,7 +254,8 @@ def board_to_tensor(fen):
 
             col += 1
 
-    return [my_pawns, my_knights, my_bishops, my_rooks, my_queens, my_king, enemy_pawns, enemy_knights, enemy_bishops, enemy_rooks, enemy_queens, enemy_king]
+    tensor = [my_pawns, my_knights, my_bishops, my_rooks, my_queens, my_king, enemy_pawns, enemy_knights, enemy_bishops, enemy_rooks, enemy_queens, enemy_king]
+    return tensor
 
 
 if __name__=='__main__':
@@ -248,7 +266,7 @@ if __name__=='__main__':
     while True:
         while True:
             command = input(PROMPT)
-            if command in ('1', '2', '3', '4', '5', '6'):
+            if command in ('1', '2', '3', '4', '5', '6', '7'):
                 break
 
         if command == '1':
@@ -263,5 +281,7 @@ if __name__=='__main__':
             eval_pos(my_net)
         elif command == '6':
             change_rate(my_net)
+        elif command == '7':
+            validation_perf(my_net)
         else:
             print('Unrecognized command: {}'.format(command))

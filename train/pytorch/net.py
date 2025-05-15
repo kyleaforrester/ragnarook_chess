@@ -16,27 +16,47 @@ class Net(nn.Module):
         # 12 input image channels for each piecetype, 32 output channels, 3x3 square convolution
         # Pad after each convolution
         # kernel
-        self.conv1 = nn.Conv2d(12, 32, 3, padding = (1, 1))
+        self.conv0 = nn.Conv2d(12, 32, 3, padding = (1, 1))
+        self.conv1 = nn.Conv2d(32, 32, 3, padding = (1, 1))
         self.conv2 = nn.Conv2d(32, 32, 3, padding = (1, 1))
         self.conv3 = nn.Conv2d(32, 32, 3, padding = (1, 1))
 
         # an affine operation: y = Wx + b
-        self.fc1 = nn.Linear(32 * 64, 64)  # 6*6 from image dimension
-        self.fc2 = nn.Linear(64, 1)
+        self.fc = nn.Linear(32 * 64, 64)  # 6*6 from image dimension
 
-        self.learning_rate = 0.001
+        # The two heads, one for wdl the other for moves remaining
+        self.wdl_logSoftmax = nn.LogSoftmax(dim=1)
+        self.wdl_head = nn.Linear(64, 3)
+        self.moves_head = nn.Linear(64, 1)
+
+        self.learning_rate = 0.1
         self.device = torch.device("cuda:0")
-        self.criterion = nn.MSELoss()
+        self.wdl_criterion = nn.NLLLoss()
+        self.moves_criterion = nn.MSELoss()
         self.optimizer = optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
+        #a = F.relu(self.conv0(x))
+        #x = x + a
+        #b = F.relu(self.conv1(x))
+        #x = x + a + b
+        #c = F.relu(self.conv2(x))
+        #x = x + a + b + c
+        #d = F.relu(self.conv3(x))
+        #x = x + a + b + c + d
+        x = F.relu(self.conv0(x))
+        x = x + F.relu(self.conv1(x))
+        x = x + F.relu(self.conv2(x))
+        x = x + F.relu(self.conv3(x))
+
         x = x.view(-1, self.num_flat_features(x))
-        x = F.relu(self.fc1(x))
-        x = torch.sigmoid(self.fc2(x))
-        return x
+        x = F.relu(self.fc(x))
+
+        # The two heads.  One is for the WDL percentage and one is for moves remaining.
+        wdl = self.wdl_logSoftmax(self.wdl_head(x))
+        moves_remaining = F.relu(self.moves_head(x.detach()))
+
+        return wdl, moves_remaining
 
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension
@@ -45,7 +65,7 @@ class Net(nn.Module):
             num_features *= s
         return num_features
 
-    def train_file(self, inputs, labels):
+    def train_file(self, inputs, wdl_labels, moves_labels):
         loss = 0.0
         running_loss = 0.0
         batch_size = 100
@@ -54,25 +74,30 @@ class Net(nn.Module):
             for i in range(stripe_count):
                 # i is number of stripes in chunked list of minibatches
                 t_inputs = torch.tensor(inputs[i::stripe_count], device=self.device)
-                t_labels = torch.tensor(labels[i::stripe_count], device=self.device)
+                t_wdl_labels = torch.tensor(wdl_labels[i::stripe_count], device=self.device)
+                t_moves_labels = torch.tensor(moves_labels[i::stripe_count], device=self.device)
 
                 self.optimizer.zero_grad()
-                outputs = self(t_inputs)
-                loss = self.criterion(outputs, t_labels)
-                loss.backward()
+                wdl_outputs, moves_remaining_outputs = self(t_inputs)
+                loss_wdl = self.wdl_criterion(wdl_outputs, t_wdl_labels)
+                loss_moves = self.moves_criterion(moves_remaining_outputs, t_moves_labels)
+
+                loss_wdl.backward()
+                # loss_moves will only updates weights in its head since it was detached
+                loss_moves.backward()
                 self.optimizer.step()
 
                 # print statistics
-                running_loss += loss.item()
+                running_loss += loss_wdl.item()
 
             # print every round
             if True:
-                loss = (running_loss/stripe_count)**(1/2)
-                print('\tRound {} Avg Linear Loss: {}'.format(r, loss))
+                loss = running_loss/stripe_count
+                print('\tRound {} Avg Loss: {}'.format(r, loss))
                 running_loss = 0.0
         return loss
 
-    def validation_loss(self, inputs, labels):
+    def validation_loss(self, inputs, wdl_labels, moves_labels):
         loss = 0.0
         running_loss = 0.0
         batch_size = 100
@@ -81,19 +106,20 @@ class Net(nn.Module):
             for i in range(stripe_count):
                 # i is number of stripes in chunked list of minibatches
                 t_inputs = torch.tensor(inputs[i::stripe_count], device=self.device)
-                t_labels = torch.tensor(labels[i::stripe_count], device=self.device)
+                t_wdl_labels = torch.tensor(wdl_labels[i::stripe_count], device=self.device)
+                t_moves_labels = torch.tensor(moves_labels[i::stripe_count], device=self.device)
 
-                self.optimizer.zero_grad()
-                outputs = self(t_inputs)
-                loss = self.criterion(outputs, t_labels)
+                wdl_outputs, moves_remaining_outputs = self(t_inputs)
+                loss_wdl = self.wdl_criterion(wdl_outputs, t_wdl_labels)
+                loss_moves = self.moves_criterion(moves_remaining_outputs, t_moves_labels)
 
                 # print statistics
-                running_loss += loss.item()
+                running_loss += loss_wdl.item()
 
             # print every round
             if True:
-                loss = (running_loss/stripe_count)**(1/2)
-                print('Validation Data Avg Linear Loss: {}'.format(loss))
+                loss = running_loss/stripe_count
+                print('Validation Data Avg Loss: {}'.format(loss))
                 running_loss = 0.0
         return loss
 

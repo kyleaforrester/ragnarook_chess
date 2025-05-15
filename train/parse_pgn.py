@@ -18,11 +18,11 @@ while game is not None:
         plies_to_end = total_plies - enum_node[0] - 1
         if not is_draw and plies_to_end % 2 == 0:
             #Loser
-            print("{},{},{}".format(board.fen(), -plies_to_end, 1-convert_ply_to_float(plies_to_end)))
+            print("{},{},{}".format(board.fen(), 2, plies_to_end))
         elif not is_draw and plies_to_end % 2 != 0:
             #Winner
-            print("{},{},{}".format(board.fen(), plies_to_end, convert_ply_to_float(plies_to_end)))
+            print("{},{},{}".format(board.fen(), 0, plies_to_end))
         else:
             #Draw
-            print("{},{},{}".format(board.fen(), plies_to_end, 0.5))
+            print("{},{},{}".format(board.fen(), 1, plies_to_end))
     game = chess.pgn.read_game(pgn)
